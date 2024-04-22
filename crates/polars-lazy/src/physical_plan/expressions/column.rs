@@ -1,7 +1,10 @@
 use std::borrow::Cow;
 
+use picachv::native::build_expr;
+use picachv::ExprArgument;
 use polars_core::prelude::*;
 use polars_plan::constants::CSE_REPLACED;
+use uuid::Uuid;
 
 use crate::physical_plan::state::ExecutionState;
 use crate::prelude::*;
@@ -10,11 +13,44 @@ pub struct ColumnExpr {
     name: Arc<str>,
     expr: Expr,
     schema: Option<SchemaRef>,
+    // The id on the arena.
+    expr_id: Uuid,
 }
 
 impl ColumnExpr {
-    pub fn new(name: Arc<str>, expr: Expr, schema: Option<SchemaRef>) -> Self {
-        Self { name, expr, schema }
+    pub fn new(
+        name: Arc<str>,
+        expr: Expr,
+        schema: Option<SchemaRef>,
+        ctx_id: Uuid,
+    ) -> PolarsResult<Self> {
+        let schema = match schema {
+            None => unimplemented!("schema should be known"),
+            Some(schema) => schema.clone(),
+        };
+
+        let column_id = schema
+            .index_of(&name)
+            .ok_or(polars_err!(ComputeError: "column not found in schema"))?;
+
+        let expr_arg = ExprArgument {
+            argument: Some(picachv::expr_argument::Argument::Column(
+                picachv::ColumnExpr {
+                    column: Some(picachv::column_expr::Column::ColumnId(column_id as _)),
+                },
+            )),
+        };
+
+        println!("debug: {ctx_id}");
+        let expr_id = build_expr(ctx_id, expr_arg)
+            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+
+        Ok(Self {
+            name,
+            expr,
+            schema: Some(schema),
+            expr_id,
+        })
     }
 }
 
@@ -133,6 +169,11 @@ impl PhysicalExpr for ColumnExpr {
     fn as_expression(&self) -> Option<&Expr> {
         Some(&self.expr)
     }
+
+    fn get_uuid(&self) -> Uuid {
+        self.expr_id
+    }
+
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
         let out = match &self.schema {
             None => self.process_by_linear_search(df, state, false),

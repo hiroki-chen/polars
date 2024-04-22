@@ -4,9 +4,11 @@ use std::sync::{Mutex, RwLock};
 
 use bitflags::bitflags;
 use once_cell::sync::OnceCell;
+use picachv::TransformInfo;
 use polars_core::config::verbose;
 use polars_core::prelude::*;
 use polars_ops::prelude::ChunkJoinOptIds;
+use uuid::Uuid;
 
 use crate::physical_plan::node_timer::NodeTimer;
 
@@ -72,6 +74,10 @@ pub struct ExecutionState {
     pub(super) ext_contexts: Arc<Vec<DataFrame>>,
     node_timer: Option<NodeTimer>,
     stop: Arc<AtomicBool>,
+    // ----- ADDED -------
+    pub(super) ctx_id: Uuid,
+    pub(super) active_df_uuid: Uuid,
+    pub(super) transform: TransformInfo,
 }
 
 impl ExecutionState {
@@ -90,7 +96,22 @@ impl ExecutionState {
             ext_contexts: Default::default(),
             node_timer: None,
             stop: Arc::new(AtomicBool::new(false)),
+            ctx_id: Uuid::nil(),
+            active_df_uuid: Uuid::nil(),
+            transform: Default::default(),
         }
+    }
+
+    pub(crate) fn set_ctx_id(&mut self, ctx_id: Uuid) {
+        self.ctx_id = ctx_id;
+    }
+
+    pub(crate) fn set_active_df_uuid(&mut self, active_df_uuid: Uuid) {
+        self.active_df_uuid = active_df_uuid;
+    }
+
+    pub(crate) fn get_active_df_uuid(&self) -> Uuid {
+        self.active_df_uuid
     }
 
     /// Toggle this to measure execution times.
@@ -142,6 +163,9 @@ impl ExecutionState {
             ext_contexts: self.ext_contexts.clone(),
             node_timer: self.node_timer.clone(),
             stop: self.stop.clone(),
+            ctx_id: self.ctx_id,
+            active_df_uuid: self.active_df_uuid,
+            transform: self.transform.clone(),
         }
     }
 
@@ -157,6 +181,9 @@ impl ExecutionState {
             ext_contexts: self.ext_contexts.clone(),
             node_timer: self.node_timer.clone(),
             stop: self.stop.clone(),
+            ctx_id: self.ctx_id,
+            active_df_uuid: self.active_df_uuid,
+            transform: self.transform.clone(),
         }
     }
 

@@ -1,18 +1,28 @@
 use std::borrow::Cow;
 use std::ops::Deref;
 
+use picachv::expr_argument::Argument;
+use picachv::native::build_expr;
+use picachv::ExprArgument;
 use polars_core::prelude::*;
 use polars_core::utils::NoNull;
 use polars_plan::constants::LITERAL_NAME;
+use uuid::Uuid;
 
 use crate::physical_plan::state::ExecutionState;
 use crate::prelude::*;
 
-pub struct LiteralExpr(pub LiteralValue, Expr);
+pub struct LiteralExpr(pub LiteralValue, Expr, Uuid);
 
 impl LiteralExpr {
-    pub fn new(value: LiteralValue, expr: Expr) -> Self {
-        Self(value, expr)
+    pub fn new(value: LiteralValue, expr: Expr, ctx_id: Uuid) -> PolarsResult<Self> {
+        let arg = ExprArgument {
+            argument: Some(Argument::Literal(picachv::LiteralExpr {})),
+        };
+
+        let uuid =
+            build_expr(ctx_id, arg).map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+        Ok(Self(value, expr, uuid))
     }
 }
 
@@ -20,6 +30,11 @@ impl PhysicalExpr for LiteralExpr {
     fn as_expression(&self) -> Option<&Expr> {
         Some(&self.1)
     }
+
+    fn get_uuid(&self) -> Uuid {
+        self.2
+    }
+
     fn evaluate(&self, _df: &DataFrame, _state: &ExecutionState) -> PolarsResult<Series> {
         use LiteralValue::*;
         let s = match &self.0 {

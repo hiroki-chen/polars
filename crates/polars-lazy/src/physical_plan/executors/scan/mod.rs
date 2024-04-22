@@ -19,6 +19,9 @@ pub(crate) use csv::CsvExec;
 pub(crate) use ipc::IpcExec;
 #[cfg(feature = "parquet")]
 pub(crate) use parquet::ParquetExec;
+use picachv::get_data_argument::DataSource;
+use picachv::native::build_plan;
+use picachv::{plan_argument, GetDataArgument, GetDataInMemory, PlanArgument};
 #[cfg(any(feature = "ipc", feature = "parquet"))]
 use polars_io::predicates::PhysicalIoExpr;
 #[cfg(any(feature = "parquet", feature = "csv", feature = "ipc", feature = "cse"))]
@@ -26,6 +29,7 @@ use polars_io::prelude::*;
 use polars_plan::global::_set_n_rows_for_scan;
 #[cfg(feature = "ipc")]
 pub(crate) use support::ConsecutiveCountState;
+use uuid::Uuid;
 
 use super::*;
 #[cfg(any(feature = "ipc", feature = "parquet"))]
@@ -66,10 +70,58 @@ pub struct DataFrameExec {
     pub(crate) selection: Option<Arc<dyn PhysicalExpr>>,
     pub(crate) projection: Option<Arc<Vec<String>>>,
     pub(crate) predicate_has_windows: bool,
+    // Used to locate its plan on the arena.
+    pub(crate) plan_uuid: Uuid,
+}
+
+impl DataFrameExec {
+    pub fn new(
+        df: Arc<DataFrame>,
+        selection: Option<Arc<dyn PhysicalExpr>>,
+        projection: Option<Arc<Vec<String>>>,
+        predicate_has_windows: bool,
+        ctx_id: Uuid,
+    ) -> PolarsResult<Self> {
+        let plan = PlanArgument {
+            argument: Some(plan_argument::Argument::GetData(GetDataArgument {
+                data_source: Some(DataSource::InMemory(GetDataInMemory {
+                    df_uuid: df.get_uuid().to_bytes_le().to_vec(),
+                    pred: selection
+                        .as_ref()
+                        .map(|e| e.get_uuid().to_bytes_le().to_vec()),
+                    projected_list: projection
+                        .as_ref()
+                        .cloned()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|s| df.get_column_index(s).map(|idx| idx as u64))
+                        .collect::<Option<Vec<_>>>()
+                        .ok_or(polars_err!(ComputeError: "Could not project columns"))?,
+                })),
+            })),
+        };
+        let plan_uuid = build_plan(ctx_id, plan)
+            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+
+        Ok(DataFrameExec {
+            df,
+            selection,
+            projection,
+            predicate_has_windows,
+            plan_uuid,
+        })
+    }
 }
 
 impl Executor for DataFrameExec {
+    fn get_plan_uuid(&self) -> Uuid {
+        self.plan_uuid
+    }
+
     fn execute(&mut self, state: &mut ExecutionState) -> PolarsResult<DataFrame> {
+        self.execute_prologue(state)?;
+
+        let uuid = self.df.get_uuid();
         let df = mem::take(&mut self.df);
         let mut df = Arc::try_unwrap(df).unwrap_or_else(|df| (*df).clone());
 
@@ -79,6 +131,7 @@ impl Executor for DataFrameExec {
             df = df.select(projection.as_ref())?;
         }
 
+        // TODO: Do this.
         if let Some(selection) = &self.selection {
             if self.predicate_has_windows {
                 state.insert_has_window_function_flag()
@@ -90,13 +143,28 @@ impl Executor for DataFrameExec {
             let mask = s.bool().map_err(
                 |_| polars_err!(ComputeError: "filter predicate was not of type boolean"),
             )?;
+            let pred_bool = mask
+                .iter()
+                .map(|b| {
+                    b.ok_or(polars_err!(ComputeError: "filter predicate was not of type boolean"))
+                })
+                .collect::<PolarsResult<Vec<_>>>()?;
+            state.transform.push_filter(uuid, &pred_bool).map_err(
+                |e| polars_err!(ComputeError: format!("Could not push filter transform: {}", e)),
+            )?;
             df = df.filter(mask)?;
         }
 
-        Ok(match _set_n_rows_for_scan(None) {
+        let df = match _set_n_rows_for_scan(None) {
             Some(limit) => df.head(Some(limit)),
             None => df,
-        })
+        };
+        state.transform.push_dummy(uuid).map_err(
+            |e| polars_err!(ComputeError: format!("Could not push dummy transform: {}", e)),
+        )?;
+        self.execute_epilogue(state)?;
+
+        Ok(df)
     }
 }
 

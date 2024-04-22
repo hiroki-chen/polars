@@ -1,4 +1,8 @@
+use picachv::native::build_plan;
+use picachv::plan_argument::Argument;
+use picachv::{PlanArgument, ProjectionArgument};
 use polars_core::utils::accumulate_dataframes_vertical_unchecked;
+use uuid::Uuid;
 
 use super::*;
 
@@ -15,9 +19,48 @@ pub struct ProjectionExec {
     pub(crate) options: ProjectionOptions,
     // Can run all operations elementwise
     pub(crate) streamable: bool,
+    pub(crate) plan_id: Uuid,
 }
 
 impl ProjectionExec {
+    pub(crate) fn new(
+        input: Box<dyn Executor>,
+        cse_exprs: Vec<Arc<dyn PhysicalExpr>>,
+        expr: Vec<Arc<dyn PhysicalExpr>>,
+        has_windows: bool,
+        input_schema: SchemaRef,
+        #[cfg(test)] schema: SchemaRef,
+        options: ProjectionOptions,
+        streamable: bool,
+        ctx_id: Uuid,
+    ) -> PolarsResult<Self> {
+        let plan_arg = PlanArgument {
+            argument: Some(Argument::Projection(ProjectionArgument {
+                input_uuid: input.get_plan_uuid().to_bytes_le().to_vec(),
+                expression: expr
+                    .iter()
+                    .map(|e| e.get_uuid().to_bytes_le().to_vec())
+                    .collect(),
+                schema_uuid: Default::default(),
+            })),
+        };
+        let plan_id = build_plan(ctx_id, plan_arg)
+            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+
+        Ok(ProjectionExec {
+            input,
+            cse_exprs,
+            expr,
+            has_windows,
+            input_schema,
+            #[cfg(test)]
+            schema,
+            options,
+            streamable,
+            plan_id,
+        })
+    }
+
     fn execute_impl(
         &mut self,
         state: &ExecutionState,
@@ -93,6 +136,7 @@ impl Executor for ProjectionExec {
             }
         }
         let df = self.input.execute(state)?;
+        let uuid = df.get_uuid();
 
         let profile_name = if state.has_node_timer() {
             let by = self
@@ -112,11 +156,18 @@ impl Executor for ProjectionExec {
             Cow::Borrowed("")
         };
 
-        if state.has_node_timer() {
+        let mut df = if state.has_node_timer() {
             let new_state = state.clone();
             new_state.record(|| self.execute_impl(state, df), profile_name)
         } else {
             self.execute_impl(state, df)
-        }
+        }?;
+
+        df.set_uuid(uuid);
+        Ok(df)
+    }
+
+    fn get_plan_uuid(&self) -> Uuid {
+        self.plan_id
     }
 }

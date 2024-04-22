@@ -8,7 +8,16 @@ use super::*;
 
 impl LazyFrame {
     pub fn collect_concurrently(self) -> PolarsResult<InProcessQuery> {
-        let (mut state, mut physical_plan, _) = self.prepare_collect(false)?;
+        if let Err(e) = init_monitor() {
+            match e {
+                PicachvError::Already(_) => {},
+                _ => return Err(PolarsError::ComputeError(e.to_string().into())),
+            }
+        }
+
+        // Initialize a new context id.
+        let ctx_id = open_new().map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+        let (mut state, mut physical_plan, _) = self.prepare_collect(false, ctx_id)?;
 
         let (tx, rx) = channel();
         let token = state.cancel_token();

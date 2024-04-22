@@ -4,6 +4,7 @@ use std::{mem, ops};
 
 use ahash::AHashSet;
 use rayon::prelude::*;
+use uuid::Uuid;
 
 #[cfg(feature = "algorithm_group_by")]
 use crate::chunked_array::ops::unique::is_unique_helper;
@@ -133,6 +134,8 @@ pub enum UniqueKeepStrategy {
 #[derive(Clone)]
 pub struct DataFrame {
     pub(crate) columns: Vec<Series>,
+    /// The hanlde to the DataFrame on the arena.
+    pub(crate) uuid: Uuid,
 }
 
 impl DataFrame {
@@ -171,6 +174,14 @@ impl DataFrame {
         func: &(dyn Fn(&Series) -> PolarsResult<Series> + Send + Sync),
     ) -> PolarsResult<Vec<Series>> {
         POOL.install(|| self.columns.par_iter().map(func).collect())
+    }
+
+    pub fn set_uuid(&mut self, uuid: Uuid) {
+        self.uuid = uuid;
+    }
+
+    pub fn get_uuid(&self) -> Uuid {
+        self.uuid
     }
 
     // Reduce monomorphization.
@@ -298,6 +309,7 @@ impl DataFrame {
 
         Ok(DataFrame {
             columns: series_cols,
+            uuid: Uuid::nil(),
         })
     }
 
@@ -405,7 +417,10 @@ impl DataFrame {
     /// It is the callers responsibility to uphold the contract of all `Series`
     /// having an equal length and a unique name, if not this may panic down the line.
     pub const unsafe fn new_no_checks(columns: Vec<Series>) -> DataFrame {
-        DataFrame { columns }
+        DataFrame {
+            columns,
+            uuid: Uuid::nil(),
+        }
     }
 
     /// Create a new `DataFrame` but does not check the length of the `Series`,
@@ -428,7 +443,10 @@ impl DataFrame {
         // we drop early as the brchk thinks the &str borrows are used when calling the drop
         // of both `columns` and `names`
         drop(names);
-        Ok(DataFrame { columns })
+        Ok(DataFrame {
+            columns,
+            uuid: Uuid::nil(),
+        })
     }
 
     /// Aggregate all chunks to contiguous memory.

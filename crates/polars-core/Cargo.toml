@@ -37,6 +37,7 @@ serde = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
 smartstring = { workspace = true }
 thiserror = { workspace = true }
+uuid = { workspace = true }
 xxhash-rust = { workspace = true }
 
 [dev-dependencies]
@@ -117,7 +118,13 @@ bigidx = ["arrow/bigidx", "polars-utils/bigidx"]
 python = []
 
 serde = ["dep:serde", "smartstring/serde", "bitflags/serde"]
-serde-lazy = ["serde", "arrow/serde", "indexmap/serde", "smartstring/serde", "chrono/serde"]
+serde-lazy = [
+  "serde",
+  "arrow/serde",
+  "indexmap/serde",
+  "smartstring/serde",
+  "chrono/serde",
+]
 
 docs-selection = [
   "ndarray",

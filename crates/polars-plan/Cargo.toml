@@ -80,7 +80,11 @@ dtype-i16 = ["polars-core/dtype-i16"]
 dtype-decimal = ["polars-core/dtype-decimal"]
 dtype-date = ["polars-time/dtype-date", "temporal"]
 dtype-datetime = ["polars-time/dtype-datetime", "temporal"]
-dtype-duration = ["polars-core/dtype-duration", "polars-time/dtype-duration", "temporal"]
+dtype-duration = [
+  "polars-core/dtype-duration",
+  "polars-time/dtype-duration",
+  "temporal",
+]
 dtype-time = ["polars-time/dtype-time", "temporal"]
 dtype-array = ["polars-core/dtype-array", "polars-ops/dtype-array"]
 dtype-categorical = ["polars-core/dtype-categorical"]
@@ -92,7 +96,12 @@ list_count = ["polars-ops/list_count"]
 array_count = ["polars-ops/array_count", "dtype-array"]
 trigonometry = []
 sign = []
-timezones = ["chrono-tz", "polars-time/timezones", "polars-core/timezones", "regex"]
+timezones = [
+  "chrono-tz",
+  "polars-time/timezones",
+  "polars-core/timezones",
+  "regex",
+]
 binary_encoding = ["polars-ops/binary_encoding"]
 string_encoding = ["polars-ops/string_encoding"]
 true_div = []
@@ -104,8 +113,14 @@ approx_unique = ["polars-ops/approx_unique"]
 is_in = ["polars-ops/is_in"]
 repeat_by = ["polars-ops/repeat_by"]
 round_series = ["polars-ops/round_series"]
-is_first_distinct = ["polars-core/is_first_distinct", "polars-ops/is_first_distinct"]
-is_last_distinct = ["polars-core/is_last_distinct", "polars-ops/is_last_distinct"]
+is_first_distinct = [
+  "polars-core/is_first_distinct",
+  "polars-ops/is_first_distinct",
+]
+is_last_distinct = [
+  "polars-core/is_last_distinct",
+  "polars-ops/is_last_distinct",
+]
 is_unique = ["polars-ops/is_unique"]
 is_between = ["polars-ops/is_between"]
 cross_join = ["polars-ops/cross_join"]

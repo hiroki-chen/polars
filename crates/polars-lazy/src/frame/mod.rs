@@ -29,11 +29,14 @@ pub use ipc::*;
 pub use ndjson::*;
 #[cfg(feature = "parquet")]
 pub use parquet::*;
+use picachv::native::{finalize, init_monitor, open_new};
+use picachv::PicachvError;
 use polars_core::prelude::*;
 use polars_io::RowIndex;
 pub use polars_plan::frame::{AllowedOptimizations, OptState};
 use polars_plan::global::FETCH_ROWS;
 use smartstring::alias::String as SmartString;
+use uuid::Uuid;
 
 use crate::physical_plan::executors::Executor;
 use crate::physical_plan::planner::{create_physical_expr, create_physical_plan};
@@ -53,6 +56,7 @@ impl IntoLazy for DataFrame {
         LazyFrame {
             logical_plan: lp,
             opt_state: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -71,6 +75,7 @@ impl IntoLazy for LazyFrame {
 pub struct LazyFrame {
     pub logical_plan: DslPlan,
     pub(crate) opt_state: OptState,
+    pub(crate) ctx_id: Uuid,
 }
 
 impl From<DslPlan> for LazyFrame {
@@ -81,6 +86,7 @@ impl From<DslPlan> for LazyFrame {
                 file_caching: true,
                 ..Default::default()
             },
+            ..Default::default()
         }
     }
 }
@@ -107,7 +113,17 @@ impl LazyFrame {
         LazyFrame {
             logical_plan,
             opt_state,
+            ctx_id: Uuid::nil(),
         }
+    }
+
+    pub fn set_ctx_id(mut self, ctx_id: Uuid) -> Self {
+        self.ctx_id = ctx_id;
+        self
+    }
+
+    pub fn get_ctx_id(&self) -> Uuid {
+        self.ctx_id
     }
 
     /// Get current optimizations.
@@ -593,6 +609,7 @@ impl LazyFrame {
     fn prepare_collect(
         mut self,
         check_sink: bool,
+        ctx_id: Uuid,
     ) -> PolarsResult<(ExecutionState, Box<dyn Executor>, bool)> {
         let mut expr_arena = Arena::with_capacity(256);
         let mut lp_arena = Arena::with_capacity(128);
@@ -606,7 +623,7 @@ impl LazyFrame {
         } else {
             true
         };
-        let physical_plan = create_physical_plan(lp_top, &mut lp_arena, &mut expr_arena)?;
+        let physical_plan = create_physical_plan(lp_top, &mut lp_arena, &mut expr_arena, ctx_id)?;
 
         let state = ExecutionState::new();
         Ok((state, physical_plan, no_file_sink))
@@ -630,8 +647,14 @@ impl LazyFrame {
     /// }
     /// ```
     pub fn collect(self) -> PolarsResult<DataFrame> {
-        let (mut state, mut physical_plan, _) = self.prepare_collect(false)?;
-        physical_plan.execute(&mut state)
+        let ctx_id = self.ctx_id;
+        let (mut state, mut physical_plan, _) = self.prepare_collect(false, ctx_id)?;
+        state.set_ctx_id(ctx_id);
+        let df = physical_plan.execute(&mut state)?;
+        finalize(ctx_id, state.get_active_df_uuid())
+            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+
+        Ok(df)
     }
 
     /// Profile a LazyFrame.
@@ -642,7 +665,17 @@ impl LazyFrame {
     ///
     /// The units of the timings are microseconds.
     pub fn profile(self) -> PolarsResult<(DataFrame, DataFrame)> {
-        let (mut state, mut physical_plan, _) = self.prepare_collect(false)?;
+        if let Err(e) = init_monitor() {
+            match e {
+                PicachvError::Already(_) => {},
+                _ => return Err(PolarsError::ComputeError(e.to_string().into())),
+            }
+        }
+
+        // Initialize a new context id.
+        let ctx_id = open_new().map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+        let (mut state, mut physical_plan, _) = self.prepare_collect(false, ctx_id)?;
+        state.set_ctx_id(ctx_id);
         state.time_nodes();
         let out = physical_plan.execute(&mut state)?;
         let timer_df = state.finish_timer()?;
@@ -770,7 +803,8 @@ impl LazyFrame {
             input: Arc::new(self.logical_plan),
             payload,
         };
-        let (mut state, mut physical_plan, is_streaming) = self.prepare_collect(true)?;
+        let (mut state, mut physical_plan, is_streaming) =
+            self.prepare_collect(true, Uuid::nil())?;
         polars_ensure!(
             is_streaming,
             ComputeError: format!("cannot run the whole query in a streaming order; \
@@ -1652,6 +1686,7 @@ impl From<LazyGroupBy> for LazyFrame {
         Self {
             logical_plan: lgb.logical_plan,
             opt_state: lgb.opt_state,
+            ..Default::default()
         }
     }
 }

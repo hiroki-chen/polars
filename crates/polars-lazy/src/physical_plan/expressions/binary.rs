@@ -1,7 +1,11 @@
+use picachv::expr_argument::Argument;
+use picachv::native::build_expr;
+use picachv::ExprArgument;
 use polars_core::prelude::*;
 use polars_core::POOL;
 #[cfg(feature = "round_series")]
 use polars_ops::prelude::floor_div_series;
+use uuid::Uuid;
 
 use crate::physical_plan::state::ExecutionState;
 use crate::prelude::*;
@@ -12,6 +16,7 @@ pub struct BinaryExpr {
     right: Arc<dyn PhysicalExpr>,
     expr: Expr,
     has_literal: bool,
+    expr_id: Uuid,
 }
 
 impl BinaryExpr {
@@ -21,14 +26,31 @@ impl BinaryExpr {
         right: Arc<dyn PhysicalExpr>,
         expr: Expr,
         has_literal: bool,
-    ) -> Self {
-        Self {
+        ctx_id: Uuid,
+    ) -> PolarsResult<Self> {
+        let lhs_uuid = left.get_uuid();
+        let rhs_uuid = right.get_uuid();
+
+        let expr_arg = ExprArgument {
+            argument: Some(Argument::Binary(picachv::BinaryExpr {
+                left_uuid: lhs_uuid.to_bytes_le().to_vec(),
+                op: Some(op_to_binop(op)?),
+                right_uuid: rhs_uuid.to_bytes_le().to_vec(),
+            })),
+        };
+
+        let expr_id = build_expr(ctx_id, expr_arg).map_err(|e| {
+            PolarsError::ComputeError(format!("Could not build expression: {}", e).into())
+        })?;
+
+        Ok(Self {
             left,
             op,
             right,
             expr,
             has_literal,
-        }
+            expr_id,
+        })
     }
 }
 
@@ -152,6 +174,10 @@ impl BinaryExpr {
 impl PhysicalExpr for BinaryExpr {
     fn as_expression(&self) -> Option<&Expr> {
         Some(&self.expr)
+    }
+
+    fn get_uuid(&self) -> Uuid {
+        self.expr_id
     }
 
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {

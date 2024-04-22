@@ -4,6 +4,7 @@ use polars_core::utils::_split_offsets;
 use polars_core::POOL;
 use polars_plan::prelude::expr_ir::ExprIR;
 use rayon::prelude::*;
+use uuid::Uuid;
 
 use super::super::expressions as phys_expr;
 use crate::prelude::*;
@@ -89,6 +90,8 @@ pub(crate) struct ExpressionConversionState {
     // settings per expression
     // those are reset every expression
     local: LocalConversionState,
+    // The context id.
+    pub(crate) ctx_id: Uuid,
 }
 
 #[derive(Copy, Clone, Default)]
@@ -116,6 +119,10 @@ impl ExpressionConversionState {
     fn set_window(&mut self) {
         self.has_windows = true;
         self.local.has_window = true;
+    }
+
+    pub(crate) fn set_ctx_id(&mut self, ctx_id: Uuid) {
+        self.ctx_id = ctx_id;
     }
 }
 
@@ -148,7 +155,12 @@ fn create_physical_expr_inner(
 ) -> PolarsResult<Arc<dyn PhysicalExpr>> {
     use AExpr::*;
 
-    match expr_arena.get(expression).clone() {
+    let expr = expr_arena.get(expression).clone();
+
+    println!("debug: create_physical_expr_inner: {}", state.ctx_id);
+    println!("debug: create_physical_expr_inner: {expr:?}");
+
+    match expr {
         Len => Ok(Arc::new(phys_expr::CountExpr::new())),
         Window {
             mut function,
@@ -229,7 +241,8 @@ fn create_physical_expr_inner(
             Ok(Arc::new(LiteralExpr::new(
                 value,
                 node_to_expr(expression, expr_arena),
-            )))
+                state.ctx_id,
+            )?))
         },
         BinaryExpr { left, op, right } => {
             let lhs = create_physical_expr_inner(left, ctxt, expr_arena, schema, state)?;
@@ -240,13 +253,15 @@ fn create_physical_expr_inner(
                 rhs,
                 node_to_expr(expression, expr_arena),
                 state.local.has_lit,
-            )))
+                state.ctx_id,
+            )?))
         },
         Column(column) => Ok(Arc::new(ColumnExpr::new(
             column,
             node_to_expr(expression, expr_arena),
             schema.cloned(),
-        ))),
+            state.ctx_id,
+        )?)),
         Sort { expr, options } => {
             let phys_expr = create_physical_expr_inner(expr, ctxt, expr_arena, schema, state)?;
             Ok(Arc::new(SortExpr::new(

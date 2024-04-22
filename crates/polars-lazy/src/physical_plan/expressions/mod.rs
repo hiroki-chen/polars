@@ -40,10 +40,42 @@ pub(crate) use sort::*;
 pub(crate) use sortby::*;
 pub(crate) use take::*;
 pub(crate) use ternary::*;
+use uuid::Uuid;
 pub(crate) use window::*;
 
 use crate::physical_plan::state::ExecutionState;
 use crate::prelude::*;
+
+pub(crate) fn op_to_binop(op: Operator) -> PolarsResult<picachv::BinaryOperator> {
+    match op {
+        Operator::Eq => Ok(picachv::BinaryOperator {
+            operator: Some(picachv::binary_operator::Operator::ComparisonOperator(
+                picachv::ComparisonBinaryOperator::Eq.into(),
+            )),
+        }),
+        Operator::NotEq => Ok(picachv::BinaryOperator {
+            operator: Some(picachv::binary_operator::Operator::ComparisonOperator(
+                picachv::ComparisonBinaryOperator::Ne.into(),
+            )),
+        }),
+        Operator::Lt => Ok(picachv::BinaryOperator {
+            operator: Some(picachv::binary_operator::Operator::ComparisonOperator(
+                picachv::ComparisonBinaryOperator::Lt.into(),
+            )),
+        }),
+        Operator::Gt => Ok(picachv::BinaryOperator {
+            operator: Some(picachv::binary_operator::Operator::ComparisonOperator(
+                picachv::ComparisonBinaryOperator::Gt.into(),
+            )),
+        }),
+        Operator::Plus => Ok(picachv::BinaryOperator {
+            operator: Some(picachv::binary_operator::Operator::ArithmeticOperator(
+                picachv::ArithmeticBinaryOperator::Add.into(),
+            )),
+        }),
+        _ => Err(polars_err!(ComputeError: "operation not supported")),
+    }
+}
 
 #[derive(Clone, Debug)]
 pub(crate) enum AggState {
@@ -570,6 +602,10 @@ impl<'a> AggregationContext<'a> {
 pub trait PhysicalExpr: Send + Sync {
     fn as_expression(&self) -> Option<&Expr> {
         None
+    }
+
+    fn get_uuid(&self) -> Uuid {
+        unimplemented!("should be implemented by the expr")
     }
 
     /// Take a DataFrame and evaluate the expression.
