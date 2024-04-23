@@ -119,9 +119,11 @@ impl Executor for DataFrameExec {
     }
 
     fn execute(&mut self, state: &mut ExecutionState) -> PolarsResult<DataFrame> {
+        let uuid = self.df.get_uuid();
+        state.set_active_df_uuid(uuid);
+
         self.execute_prologue(state)?;
 
-        let uuid = self.df.get_uuid();
         let df = mem::take(&mut self.df);
         let mut df = Arc::try_unwrap(df).unwrap_or_else(|df| (*df).clone());
 

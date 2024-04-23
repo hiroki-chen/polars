@@ -2539,6 +2539,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a76df7075c7d4d01fdcb46c912dd17fba5b60c78ea480b475f2b6ab6f666584e"
 dependencies = [
  "num-traits",
+ "rand",
+ "serde",
 ]
 
 [[package]]
@@ -2699,6 +2701,8 @@ dependencies = [
  "picachv-message",
  "polars-core 0.39.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "polars-utils 0.39.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde",
+ "serde_json",
  "tabled",
  "uuid",
 ]
@@ -2905,6 +2909,7 @@ dependencies = [
  "polars-error 0.39.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "polars-utils 0.39.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "ryu",
+ "serde",
  "simdutf8",
  "streaming-iterator",
  "strength_reduce",
@@ -2999,6 +3004,7 @@ dependencies = [
  "ahash",
  "bitflags 2.5.0",
  "bytemuck",
+ "chrono",
  "either",
  "hashbrown 0.14.3",
  "indexmap",
@@ -3010,6 +3016,7 @@ dependencies = [
  "polars-row 0.39.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "polars-utils 0.39.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon",
+ "serde",
  "serde_json",
  "smartstring",
  "thiserror",
@@ -3687,6 +3694,7 @@ dependencies = [
  "libc",
  "rand_chacha",
  "rand_core",
+ "serde",
 ]
 
 [[package]]
@@ -3706,6 +3714,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "getrandom",
+ "serde",
 ]
 
 [[package]]
@@ -4176,18 +4185,18 @@ checksum = "a3f0bf26fd526d2a95683cd0f87bf103b8539e2ca1ef48ce002d67aad59aa0b4"
 
 [[package]]
 name = "serde"
-version = "1.0.197"
+version = "1.0.198"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fb1c873e1b9b056a4dc4c0c198b24c3ffa059243875552b2bd0933b1aee4ce2"
+checksum = "9846a40c979031340571da2545a4e5b7c4163bdae79b301d5f86d03979451fcc"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.197"
+version = "1.0.198"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7eb0b34b42edc17f6b7cac84a52a1c5f0e1bb2227e997ca9011ea3dd34e8610b"
+checksum = "e88edab869b01783ba905e7d0153f9fc1a6505a96e4ad3018011eedb838566d9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4196,9 +4205,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.115"
+version = "1.0.116"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12dc5c46daa8e9fdf4f5e71b6cf9a53f2487da0e86e55808e2d35539666497dd"
+checksum = "3e17db7126d17feb94eb3fad46bf1a96b034e8aacbc2e775fe81505f8b0b2813"
 dependencies = [
  "indexmap",
  "itoa",
