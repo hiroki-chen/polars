@@ -29,7 +29,8 @@ impl Executor for UnionExec {
             false
         };
 
-        if !self.options.parallel || sliced_path {
+        let mut active_df_uuids = vec![]; // Records all the activet dataframes returned by each sub-operator.
+        let out = if !self.options.parallel || sliced_path {
             if state.verbose() {
                 if !self.options.parallel {
                     eprintln!("UNION: `parallel=false` union is run sequentially")
@@ -47,6 +48,7 @@ impl Executor for UnionExec {
                 state.branch_idx += idx;
 
                 let df = input.execute(&mut state)?;
+                active_df_uuids.push(state.active_df_uuid);
 
                 if !sliced_path {
                     dfs.push(df);
@@ -97,14 +99,19 @@ impl Executor for UnionExec {
                                 let mut input = std::mem::take(input);
                                 let mut state = state.split();
                                 state.branch_idx += idx;
-                                input.execute(&mut state)
+                                Ok((input.execute(&mut state)?, state.active_df_uuid))
                             })
                             .collect::<PolarsResult<Vec<_>>>()
                     })
                     .collect::<PolarsResult<Vec<_>>>()
-            });
+            })?;
 
-            concat_df(out?.iter().flat_map(|dfs| dfs.iter())).map(|df| {
+            active_df_uuids = out
+                .iter()
+                .flat_map(|dfs| dfs.iter().map(|(_, uuid)| *uuid))
+                .collect::<Vec<_>>();
+
+            concat_df(out.iter().flat_map(|dfs| dfs.iter().map(|e| &e.0))).map(|df| {
                 if let Some((offset, len)) = self.options.slice {
                     df.slice(offset, len)
                 } else {
@@ -117,6 +124,14 @@ impl Executor for UnionExec {
                 df.as_single_chunk_par();
             }
             df
-        })
+        })?;
+
+        state
+            .transform
+            .push_union(active_df_uuids)
+            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+        self.execute_epilogue(state, None)?;
+
+        Ok(out)
     }
 }

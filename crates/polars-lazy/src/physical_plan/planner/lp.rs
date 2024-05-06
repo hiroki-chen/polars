@@ -136,7 +136,7 @@ pub fn create_physical_plan(
     use IR::*;
 
     let logical_plan = lp_arena.take(root);
-    println!("debug: create_physical_plan {logical_plan:?}");
+    println!("debug: create_physical_plan {logical_plan:?} {ctx_id}");
     match logical_plan {
         #[cfg(feature = "python")]
         PythonScan { options, .. } => Ok(Box::new(executors::PythonScanExec { options })),
@@ -210,8 +210,7 @@ pub fn create_physical_plan(
                 input,
                 state.has_windows,
                 streamable,
-                ctx_id,
-            )?))
+            )))
         },
         #[allow(unused_variables)]
         Scan {
@@ -333,8 +332,7 @@ pub fn create_physical_plan(
                 _schema,
                 options,
                 streamable,
-                ctx_id,
-            )?))
+            )))
         },
         DataFrameScan {
             df,
@@ -363,8 +361,7 @@ pub fn create_physical_plan(
                 selection,
                 projection,
                 state.has_windows,
-                ctx_id,
-            )?))
+            )))
         },
         Sort {
             input,
@@ -414,20 +411,23 @@ pub fn create_physical_plan(
             options,
         } => {
             let input_schema = lp_arena.get(input).schema(lp_arena).into_owned();
+            let mut state = ExpressionConversionState::default();
+            state.set_ctx_id(ctx_id);
+
             let options = Arc::try_unwrap(options).unwrap_or_else(|options| (*options).clone());
             let phys_keys = create_physical_expressions_from_irs(
                 &keys,
                 Context::Default,
                 expr_arena,
                 Some(&input_schema),
-                &mut Default::default(),
+                &mut state,
             )?;
             let phys_aggs = create_physical_expressions_from_irs(
                 &aggs,
                 Context::Aggregation,
                 expr_arena,
                 Some(&input_schema),
-                &mut Default::default(),
+                &mut state,
             )?;
 
             let _slice = options.slice;
@@ -462,6 +462,8 @@ pub fn create_physical_plan(
             // We first check if we can partition the group_by on the latest moment.
             let partitionable = partitionable_gb(&keys, &aggs, &input_schema, expr_arena, &apply);
             if partitionable {
+                println!("debug: create_physical_plan PartitionGroupByExec {ctx_id}");
+
                 let from_partitioned_ds = (&*lp_arena).iter(input).any(|(_, lp)| {
                     if let Union { options, .. } = lp {
                         options.from_partitioned_ds
@@ -491,6 +493,7 @@ pub fn create_physical_plan(
                     aggs,
                 )))
             } else {
+                println!("debug: create_physical_plan GroupByExec {ctx_id}");
                 let input = create_physical_plan(input, lp_arena, expr_arena, ctx_id)?;
                 Ok(Box::new(executors::GroupByExec::new(
                     input,

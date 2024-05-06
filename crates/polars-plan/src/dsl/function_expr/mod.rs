@@ -76,12 +76,15 @@ pub(crate) use correlation::CorrelationMethod;
 #[cfg(feature = "fused")]
 pub(crate) use fused::FusedOperator;
 pub(super) use list::ListFunction;
+use picachv::expr_argument::Argument;
+use picachv::{ApplyExpr, ExprArgument, LiteralExpr};
 use polars_core::prelude::*;
 #[cfg(feature = "random")]
 pub(crate) use random::RandomMethod;
 use schema::FieldsMapper;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 pub(crate) use self::binary::BinaryFunction;
 pub use self::boolean::BooleanFunction;
@@ -339,6 +342,17 @@ pub enum FunctionExpr {
     #[cfg(feature = "reinterpret")]
     Reinterpret(bool),
     ExtendConstant,
+}
+
+impl FunctionExpr {
+    pub fn to_expr_argument(&self, inputs: &[Uuid]) -> PolarsResult<ExprArgument> {
+        Ok(ExprArgument {
+            argument: Some(Argument::Apply(ApplyExpr {
+                input_uuids: inputs.iter().map(|e| e.to_bytes_le().to_vec()).collect(),
+                name: self.to_string(),
+            })),
+        })
+    }
 }
 
 impl Hash for FunctionExpr {

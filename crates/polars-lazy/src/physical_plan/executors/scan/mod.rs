@@ -20,7 +20,6 @@ pub(crate) use ipc::IpcExec;
 #[cfg(feature = "parquet")]
 pub(crate) use parquet::ParquetExec;
 use picachv::get_data_argument::DataSource;
-use picachv::native::build_plan;
 use picachv::{plan_argument, GetDataArgument, GetDataInMemory, PlanArgument};
 #[cfg(any(feature = "ipc", feature = "parquet"))]
 use polars_io::predicates::PhysicalIoExpr;
@@ -29,7 +28,6 @@ use polars_io::prelude::*;
 use polars_plan::global::_set_n_rows_for_scan;
 #[cfg(feature = "ipc")]
 pub(crate) use support::ConsecutiveCountState;
-use uuid::Uuid;
 
 use super::*;
 #[cfg(any(feature = "ipc", feature = "parquet"))]
@@ -70,8 +68,6 @@ pub struct DataFrameExec {
     pub(crate) selection: Option<Arc<dyn PhysicalExpr>>,
     pub(crate) projection: Option<Arc<Vec<String>>>,
     pub(crate) predicate_has_windows: bool,
-    // Used to locate its plan on the arena.
-    pub(crate) plan_uuid: Uuid,
 }
 
 impl DataFrameExec {
@@ -80,49 +76,20 @@ impl DataFrameExec {
         selection: Option<Arc<dyn PhysicalExpr>>,
         projection: Option<Arc<Vec<String>>>,
         predicate_has_windows: bool,
-        ctx_id: Uuid,
-    ) -> PolarsResult<Self> {
-        let plan = PlanArgument {
-            argument: Some(plan_argument::Argument::GetData(GetDataArgument {
-                data_source: Some(DataSource::InMemory(GetDataInMemory {
-                    df_uuid: df.get_uuid().to_bytes_le().to_vec(),
-                    pred: selection
-                        .as_ref()
-                        .map(|e| e.get_uuid().to_bytes_le().to_vec()),
-                    projected_list: projection
-                        .as_ref()
-                        .cloned()
-                        .unwrap_or_default()
-                        .iter()
-                        .map(|s| df.get_column_index(s).map(|idx| idx as u64))
-                        .collect::<Option<Vec<_>>>()
-                        .ok_or(polars_err!(ComputeError: "Could not project columns"))?,
-                })),
-            })),
-        };
-        let plan_uuid = build_plan(ctx_id, plan)
-            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
-
-        Ok(DataFrameExec {
+    ) -> Self {
+        DataFrameExec {
             df,
             selection,
             projection,
             predicate_has_windows,
-            plan_uuid,
-        })
+        }
     }
 }
 
 impl Executor for DataFrameExec {
-    fn get_plan_uuid(&self) -> Uuid {
-        self.plan_uuid
-    }
-
     fn execute(&mut self, state: &mut ExecutionState) -> PolarsResult<DataFrame> {
         let uuid = self.df.get_uuid();
         state.set_active_df_uuid(uuid);
-
-        self.execute_prologue(state)?;
 
         let df = mem::take(&mut self.df);
         let mut df = Arc::try_unwrap(df).unwrap_or_else(|df| (*df).clone());
@@ -164,8 +131,29 @@ impl Executor for DataFrameExec {
         state.transform.push_dummy(uuid).map_err(
             |e| polars_err!(ComputeError: format!("Could not push dummy transform: {}", e)),
         )?;
-        self.execute_epilogue(state)?;
 
+        let plan_arg = PlanArgument {
+            argument: Some(plan_argument::Argument::GetData(GetDataArgument {
+                data_source: Some(DataSource::InMemory(GetDataInMemory {
+                    df_uuid: state.active_df_uuid.clone().to_bytes_le().to_vec(),
+                    pred: self
+                        .selection
+                        .as_ref()
+                        .map(|e| e.get_uuid().to_bytes_le().to_vec()),
+                    projected_list: self
+                        .projection
+                        .as_ref()
+                        .cloned()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|s| s.clone())
+                        .collect::<Vec<_>>(),
+                })),
+            })),
+        };
+        self.execute_epilogue(state, Some(plan_arg))?;
+
+        println!("after scan: uuid = {}", state.active_df_uuid);
         Ok(df)
     }
 }

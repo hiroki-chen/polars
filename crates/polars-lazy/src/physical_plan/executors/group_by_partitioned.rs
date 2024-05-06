@@ -1,3 +1,5 @@
+use picachv::plan_argument::Argument;
+use picachv::{AggregateArgument, PlanArgument};
 use polars_core::series::IsSorted;
 use polars_core::utils::{accumulate_dataframes_vertical, split_df};
 use rayon::prelude::*;
@@ -309,6 +311,12 @@ impl PartitionGroupByExec {
         let gb = df.group_by_with_series(keys, true, self.maintain_order)?;
         let mut groups = gb.get_groups();
 
+        state
+            .group_tuples
+            .write()
+            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?
+            .insert("proxy".into(), groups.clone());
+
         #[allow(unused_assignments)]
         // it is unused because we only use it to keep the lifetime of sliced_group valid
         let mut sliced_groups = None;
@@ -364,11 +372,33 @@ impl Executor for PartitionGroupByExec {
         } else {
             Cow::Borrowed("")
         };
-        if state.has_node_timer() {
+
+        let df = if state.has_node_timer() {
             let new_state = state.clone();
             new_state.record(|| self.execute_impl(state, original_df), profile_name)
         } else {
             self.execute_impl(state, original_df)
-        }
+        }?;
+
+        let gb = state.group_tuples.read().unwrap().get("proxy").cloned();
+        let plan_arg = PlanArgument {
+            argument: Some(Argument::Aggregate(AggregateArgument {
+                keys: self
+                    .phys_keys
+                    .iter()
+                    .map(|e| e.get_uuid().to_bytes_le().to_vec())
+                    .collect(),
+                aggs_uuid: self
+                    .phys_aggs
+                    .iter()
+                    .map(|e| e.get_uuid().to_bytes_le().to_vec())
+                    .collect(),
+                maintain_order: self.maintain_order,
+                group_by_proxy: gb.map(|gb| proxy_to_arg(&gb)),
+            })),
+        };
+
+        self.execute_epilogue(state, Some(plan_arg))?;
+        Ok(df)
     }
 }

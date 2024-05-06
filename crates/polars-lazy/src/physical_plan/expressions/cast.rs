@@ -1,4 +1,5 @@
 use polars_core::prelude::*;
+use uuid::Uuid;
 
 use crate::physical_plan::state::ExecutionState;
 use crate::prelude::*;
@@ -8,6 +9,8 @@ pub struct CastExpr {
     pub(crate) data_type: DataType,
     pub(crate) expr: Expr,
     pub(crate) strict: bool,
+    // This UUID is inherited from the input expression.
+    pub(crate) expr_uuid: Uuid,
 }
 
 impl CastExpr {
@@ -18,11 +21,32 @@ impl CastExpr {
             input.cast(&self.data_type)
         }
     }
+
+    pub fn new(
+        input: Arc<dyn PhysicalExpr>,
+        data_type: DataType,
+        expr: Expr,
+        strict: bool,
+    ) -> PolarsResult<Self> {
+        let expr_uuid = input.get_uuid();
+
+        Ok(Self {
+            input,
+            data_type,
+            expr,
+            strict,
+            expr_uuid,
+        })
+    }
 }
 
 impl PhysicalExpr for CastExpr {
     fn as_expression(&self) -> Option<&Expr> {
         Some(&self.expr)
+    }
+
+    fn get_uuid(&self) -> Uuid {
+        self.expr_uuid
     }
 
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {

@@ -4,12 +4,16 @@ use arrow::array::*;
 use arrow::compute::concatenate::concatenate;
 use arrow::legacy::utils::CustomIterTools;
 use arrow::offset::Offsets;
+use picachv::expr_argument::Argument;
+use picachv::native::build_expr;
+use picachv::{AggExpr, ExprArgument, SumExpr};
 use polars_core::prelude::*;
 use polars_core::utils::NoNull;
 #[cfg(feature = "dtype-struct")]
 use polars_core::POOL;
 #[cfg(feature = "propagate_nans")]
 use polars_ops::prelude::nan_propagating_aggregate;
+use uuid::Uuid;
 
 use crate::physical_plan::state::ExecutionState;
 use crate::prelude::AggState::{AggregatedList, AggregatedScalar};
@@ -19,21 +23,55 @@ pub(crate) struct AggregationExpr {
     pub(crate) input: Arc<dyn PhysicalExpr>,
     pub(crate) agg_type: GroupByMethod,
     field: Option<Field>,
+    expr_uuid: Uuid,
 }
 
 impl AggregationExpr {
-    pub fn new(expr: Arc<dyn PhysicalExpr>, agg_type: GroupByMethod, field: Option<Field>) -> Self {
-        Self {
+    pub fn new(
+        expr: Arc<dyn PhysicalExpr>,
+        agg_type: GroupByMethod,
+        field: Option<Field>,
+        ctx_id: Uuid,
+    ) -> PolarsResult<Self> {
+        // Wrap into another function.
+        let arg = arg_to_expr(&expr, agg_type)?;
+
+        let expr_uuid =
+            build_expr(ctx_id, arg).map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+
+        Ok(Self {
             input: expr,
             agg_type,
             field,
-        }
+            expr_uuid,
+        })
     }
+}
+
+fn arg_to_expr(
+    expr: &Arc<dyn PhysicalExpr>,
+    agg_type: GroupByMethod,
+) -> PolarsResult<ExprArgument> {
+    let input_uuid = expr.get_uuid().to_bytes_le().to_vec();
+    let arg = ExprArgument {
+        argument: Some(Argument::Agg(AggExpr {
+            expr: Some(match agg_type {
+                GroupByMethod::Sum => picachv::agg_expr::Expr::Sum(SumExpr { input_uuid }),
+                _ => polars_bail!(ComputeError: "Aggregation method not supported: {:?}", agg_type),
+            }),
+        })),
+    };
+
+    Ok(arg)
 }
 
 impl PhysicalExpr for AggregationExpr {
     fn as_expression(&self) -> Option<&Expr> {
         None
+    }
+
+    fn get_uuid(&self) -> Uuid {
+        self.expr_uuid
     }
 
     fn evaluate(&self, _df: &DataFrame, _state: &ExecutionState) -> PolarsResult<Series> {

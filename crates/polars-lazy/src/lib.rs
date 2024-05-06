@@ -212,3 +212,4 @@ mod tests;
 pub mod utils;
 
 pub use picachv::*;
+pub use uuid;

@@ -471,6 +471,7 @@ fn create_physical_expr_inner(
                     Ok(Arc::new(ApplyExpr::new_minimal(
                         vec![input],
                         function,
+                        None,
                         node_to_expr(expression, expr_arena),
                         ApplyOptions::ElementWise,
                     )))
@@ -498,7 +499,12 @@ fn create_physical_expr_inner(
                         })
                         .transpose()?;
                     let agg_method: GroupByMethod = agg.into();
-                    Ok(Arc::new(AggregationExpr::new(input, agg_method, field)))
+                    Ok(Arc::new(AggregationExpr::new(
+                        input,
+                        agg_method,
+                        field,
+                        state.ctx_id,
+                    )?))
                 },
             }
         },
@@ -508,12 +514,18 @@ fn create_physical_expr_inner(
             strict,
         } => {
             let phys_expr = create_physical_expr_inner(expr, ctxt, expr_arena, schema, state)?;
-            Ok(Arc::new(CastExpr {
-                input: phys_expr,
+            // Ok(Arc::new(CastExpr {
+            //     input: phys_expr,
+            //     data_type,
+            //     expr: node_to_expr(expression, expr_arena),
+            //     strict,
+            // }))
+            Ok(Arc::new(CastExpr::new(
+                phys_expr,
                 data_type,
-                expr: node_to_expr(expression, expr_arena),
+                node_to_expr(expression, expr_arena),
                 strict,
-            }))
+            )?))
         },
         Ternary {
             predicate,
@@ -563,11 +575,13 @@ fn create_physical_expr_inner(
             Ok(Arc::new(ApplyExpr::new(
                 input,
                 function,
+                None,
                 node_to_expr(expression, expr_arena),
                 options,
                 !state.has_cache,
                 schema.cloned(),
-            )))
+                state.ctx_id,
+            )?))
         },
         Function {
             input,
@@ -593,12 +607,14 @@ fn create_physical_expr_inner(
 
             Ok(Arc::new(ApplyExpr::new(
                 input,
-                function.into(),
+                function.clone().into(),
+                Some(function),
                 node_to_expr(expression, expr_arena),
                 options,
                 !state.has_cache,
                 schema.cloned(),
-            )))
+                state.ctx_id,
+            )?))
         },
         Slice {
             input,
@@ -624,6 +640,7 @@ fn create_physical_expr_inner(
             Ok(Arc::new(ApplyExpr::new_minimal(
                 vec![input],
                 function,
+                None,
                 node_to_expr(expression, expr_arena),
                 ApplyOptions::GroupWise,
             )))

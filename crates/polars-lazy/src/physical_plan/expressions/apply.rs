@@ -1,12 +1,16 @@
 use std::borrow::Cow;
 
+use picachv::native::{build_expr, reify_expression};
 use polars_core::prelude::*;
 use polars_core::POOL;
+use polars_io::ipc::IpcStreamWriter;
 #[cfg(feature = "parquet")]
 use polars_io::predicates::{BatchStats, StatsEvaluator};
+use polars_io::SerWriter;
 #[cfg(feature = "is_between")]
 use polars_ops::prelude::ClosedInterval;
 use rayon::prelude::*;
+use uuid::Uuid;
 
 use crate::physical_plan::state::ExecutionState;
 use crate::prelude::*;
@@ -14,6 +18,7 @@ use crate::prelude::*;
 pub struct ApplyExpr {
     inputs: Vec<Arc<dyn PhysicalExpr>>,
     function: SpecialEq<Arc<dyn SeriesUdf>>,
+    orig_function: Option<FunctionExpr>,
     expr: Expr,
     collect_groups: ApplyOptions,
     returns_scalar: bool,
@@ -23,25 +28,53 @@ pub struct ApplyExpr {
     allow_threading: bool,
     check_lengths: bool,
     allow_group_aware: bool,
+    expr_id: Uuid,
 }
 
 impl ApplyExpr {
     pub(crate) fn new(
         inputs: Vec<Arc<dyn PhysicalExpr>>,
         function: SpecialEq<Arc<dyn SeriesUdf>>,
+        orig_function: Option<FunctionExpr>,
         expr: Expr,
         options: FunctionOptions,
         allow_threading: bool,
         input_schema: Option<SchemaRef>,
-    ) -> Self {
+        ctx_id: Uuid,
+    ) -> PolarsResult<Self> {
         #[cfg(debug_assertions)]
         if matches!(options.collect_groups, ApplyOptions::ElementWise) && options.returns_scalar {
             panic!("expr {} is not implemented correctly. 'returns_scalar' and 'elementwise' are mutually exclusive", expr)
         }
 
-        Self {
+        println!(
+            "new arguments: {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}",
+            inputs.len(),
+            function,
+            orig_function,
+            expr,
+            options,
+            allow_threading,
+            input_schema,
+            ctx_id
+        );
+
+        let uuid = match orig_function.as_ref() {
+            Some(f) => {
+                // TODO: Need to give it inputs.
+                let input_uuids = inputs.iter().map(|e| e.get_uuid()).collect::<Vec<_>>();
+                let arg = f.to_expr_argument(&input_uuids)?;
+
+                build_expr(ctx_id, arg)
+                    .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?
+            },
+            None => Uuid::nil(),
+        };
+
+        Ok(Self {
             inputs,
             function,
+            orig_function,
             expr,
             collect_groups: options.collect_groups,
             returns_scalar: options.returns_scalar,
@@ -51,18 +84,21 @@ impl ApplyExpr {
             allow_threading,
             check_lengths: options.check_lengths(),
             allow_group_aware: options.allow_group_aware,
-        }
+            expr_id: uuid,
+        })
     }
 
     pub(crate) fn new_minimal(
         inputs: Vec<Arc<dyn PhysicalExpr>>,
         function: SpecialEq<Arc<dyn SeriesUdf>>,
+        orig_function: Option<FunctionExpr>,
         expr: Expr,
         collect_groups: ApplyOptions,
     ) -> Self {
         Self {
             inputs,
             function,
+            orig_function,
             expr,
             collect_groups,
             returns_scalar: false,
@@ -72,6 +108,7 @@ impl ApplyExpr {
             allow_threading: true,
             check_lengths: true,
             allow_group_aware: true,
+            expr_id: Uuid::nil(),
         }
     }
 
@@ -294,6 +331,10 @@ impl PhysicalExpr for ApplyExpr {
         Some(&self.expr)
     }
 
+    fn get_uuid(&self) -> Uuid {
+        self.expr_id
+    }
+
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
         let f = |e: &Arc<dyn PhysicalExpr>| e.evaluate(df, state);
         let mut inputs = if self.allow_threading && self.inputs.len() > 1 {
@@ -306,6 +347,29 @@ impl PhysicalExpr for ApplyExpr {
         } else {
             self.inputs.iter().map(f).collect::<PolarsResult<Vec<_>>>()
         }?;
+
+        let bytes = {
+            let mut v = vec![];
+            let mut ipc_writer = IpcStreamWriter::new(&mut v);
+
+            let mut columns = vec![];
+            let max_len = inputs.iter().map(|s| s.len()).max().unwrap_or(0);
+            for col in inputs.iter() {
+                columns.push(match col.len() == max_len {
+                    true => col.clone(),
+                    false => col.new_from_index(0, max_len),
+                })
+            }
+
+            let mut df = DataFrame::new(columns)?;
+            ipc_writer.finish(&mut df)?;
+
+            v
+        };
+
+        reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
+            PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
+        })?;
 
         if self.allow_rename {
             self.eval_and_flatten(&mut inputs)

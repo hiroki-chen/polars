@@ -1,3 +1,5 @@
+use picachv::group_by_proxy::Groups;
+use picachv::GroupByProxy;
 use rayon::prelude::*;
 
 use super::*;
@@ -66,11 +68,20 @@ pub(super) fn group_by_helper(
     df.as_single_chunk_par();
     let gb = df.group_by_with_series(keys, true, maintain_order)?;
 
+    // todo: add a check here? We may need it.
     if let Some(f) = apply {
         return gb.apply(move |df| f.call_udf(df));
     }
 
     let mut groups = gb.get_groups();
+    // Write into the state so that we can get it later.
+    state
+        .group_tuples
+        .write()
+        .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?
+        .insert("proxy".into(), groups.clone());
+
+    println!("PartitionGroupByExec: execute_impl: groups {:?}", groups);
 
     #[allow(unused_assignments)]
     // it is unused because we only use it to keep the lifetime of sliced_group valid
@@ -145,5 +156,18 @@ impl Executor for GroupByExec {
         } else {
             self.execute_impl(state, df)
         }
+    }
+}
+
+pub(crate) fn proxy_to_arg(gb: &GroupsProxy) -> GroupByProxy {
+    let gb = gb.clone().into_idx();
+
+    GroupByProxy {
+        first: gb.first().to_vec(),
+        groups: gb
+            .all()
+            .into_iter()
+            .map(|e| Groups { group: e.to_vec() })
+            .collect(),
     }
 }

@@ -1,8 +1,6 @@
-use picachv::native::build_plan;
 use picachv::plan_argument::Argument;
 use picachv::{PlanArgument, SelectArgument};
 use polars_core::utils::accumulate_dataframes_vertical_unchecked;
-use uuid::Uuid;
 
 use super::*;
 
@@ -12,7 +10,6 @@ pub struct FilterExec {
     // if the predicate contains a window function
     has_window: bool,
     streamable: bool,
-    plan_uuid: Uuid,
 }
 
 fn series_to_mask(s: &Series) -> PolarsResult<&BooleanChunked> {
@@ -29,25 +26,13 @@ impl FilterExec {
         input: Box<dyn Executor>,
         has_window: bool,
         streamable: bool,
-        ctx_id: Uuid,
-    ) -> PolarsResult<Self> {
-        let plan_arg = PlanArgument {
-            argument: Some(Argument::Select(SelectArgument {
-                input_uuid: input.get_plan_uuid().to_bytes_le().to_vec(),
-                pred_uuid: predicate.get_uuid().to_bytes_le().to_vec(),
-            })),
-        };
-
-        let plan_uuid = build_plan(ctx_id, plan_arg)
-            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
-
-        Ok(Self {
+    ) -> Self {
+        Self {
             predicate,
             input,
             has_window,
             streamable,
-            plan_uuid,
-        })
+        }
     }
 
     fn execute_hor(
@@ -132,13 +117,7 @@ impl FilterExec {
 }
 
 impl Executor for FilterExec {
-    fn get_plan_uuid(&self) -> uuid::Uuid {
-        self.plan_uuid
-    }
-
     fn execute(&mut self, state: &mut ExecutionState) -> PolarsResult<DataFrame> {
-        self.execute_prologue(state)?;
-
         state.should_stop()?;
         #[cfg(debug_assertions)]
         {
@@ -164,7 +143,13 @@ impl Executor for FilterExec {
             },
             profile_name,
         )?;
-        self.execute_epilogue(state)?;
+
+        let plan_arg = PlanArgument {
+            argument: Some(Argument::Select(SelectArgument {
+                pred_uuid: self.predicate.get_uuid().to_bytes_le().to_vec(),
+            })),
+        };
+        self.execute_epilogue(state, Some(plan_arg))?;
 
         Ok(df)
     }

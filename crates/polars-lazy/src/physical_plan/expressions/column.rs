@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use picachv::column_expr::ColumnNameSpecifier;
 use picachv::native::build_expr;
 use picachv::ExprArgument;
 use polars_core::prelude::*;
@@ -29,19 +30,18 @@ impl ColumnExpr {
             Some(schema) => schema.clone(),
         };
 
-        let column_id = schema
-            .index_of(&name)
-            .ok_or(polars_err!(ComputeError: "column not found in schema"))?;
-
         let expr_arg = ExprArgument {
             argument: Some(picachv::expr_argument::Argument::Column(
                 picachv::ColumnExpr {
-                    column: Some(picachv::column_expr::Column::ColumnId(column_id as _)),
+                    column: Some(picachv::column_expr::Column::ColumnNameSpecifier(
+                        ColumnNameSpecifier {
+                            column_name: name.to_string(),
+                        },
+                    )),
                 },
             )),
         };
 
-        println!("debug: {ctx_id}");
         let expr_id = build_expr(ctx_id, expr_arg)
             .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
 

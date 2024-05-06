@@ -1,5 +1,5 @@
-use picachv::native::{execute_epilogue, execute_prologue};
-use uuid::Uuid;
+use picachv::native::execute_epilogue;
+use picachv::PlanArgument;
 
 use super::*;
 
@@ -13,25 +13,21 @@ use super::*;
 pub trait Executor: Send {
     fn execute(&mut self, cache: &mut ExecutionState) -> PolarsResult<DataFrame>;
 
-    fn get_plan_uuid(&self) -> Uuid {
-        panic!("should not get here");
-    }
-
-    fn execute_prologue(&self, cache: &mut ExecutionState) -> PolarsResult<()> {
-        let plan_uuid = self.get_plan_uuid();
-        let uuid = execute_prologue(cache.ctx_id, plan_uuid, cache.active_df_uuid)
-            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
-        println!("setting to {uuid}");
-        cache.set_active_df_uuid(uuid);
-
-        Ok(())
-    }
-
-    fn execute_epilogue(&self, cache: &mut ExecutionState) -> PolarsResult<()> {
-        let active_df_uuid = execute_epilogue(cache.ctx_id, cache.transform.clone())
-            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+    fn execute_epilogue(
+        &self,
+        cache: &mut ExecutionState,
+        plan_arg: Option<PlanArgument>,
+    ) -> PolarsResult<()> {
+        let active_df_uuid = execute_epilogue(
+            cache.ctx_id,
+            cache.active_df_uuid,
+            plan_arg,
+            cache.transform.clone(),
+        )
+        .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
         println!("setting to {active_df_uuid}");
         cache.set_active_df_uuid(active_df_uuid);
+        cache.transform.trans_info.clear();
 
         Ok(())
     }
