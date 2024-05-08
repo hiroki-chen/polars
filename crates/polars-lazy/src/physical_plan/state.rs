@@ -78,6 +78,7 @@ pub struct ExecutionState {
     pub(super) ctx_id: Uuid,
     pub(super) active_df_uuid: Uuid,
     pub(super) transform: TransformInfo,
+    pub(super) last_used_groupby: (Vec<u64>, Vec<Vec<u64>>), // calling `idx.clone()` causes data corruption.
 }
 
 impl ExecutionState {
@@ -99,6 +100,7 @@ impl ExecutionState {
             ctx_id: Uuid::nil(),
             active_df_uuid: Uuid::nil(),
             transform: Default::default(),
+            last_used_groupby: Default::default(),
         }
     }
 
@@ -166,6 +168,7 @@ impl ExecutionState {
             ctx_id: self.ctx_id,
             active_df_uuid: self.active_df_uuid,
             transform: self.transform.clone(),
+            last_used_groupby: self.last_used_groupby.clone(),
         }
     }
 
@@ -184,6 +187,7 @@ impl ExecutionState {
             ctx_id: self.ctx_id,
             active_df_uuid: self.active_df_uuid,
             transform: self.transform.clone(),
+            last_used_groupby: self.last_used_groupby.clone(),
         }
     }
 

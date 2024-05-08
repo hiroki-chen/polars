@@ -1,5 +1,6 @@
+use picachv::group_by_proxy::Groups;
 use picachv::plan_argument::Argument;
-use picachv::{AggregateArgument, PlanArgument};
+use picachv::{AggregateArgument, GroupByProxy, PlanArgument};
 use polars_core::series::IsSorted;
 use polars_core::utils::{accumulate_dataframes_vertical, split_df};
 use rayon::prelude::*;
@@ -262,6 +263,7 @@ impl PartitionGroupByExec {
             let keys = self.keys(&original_df, state)?;
 
             if !can_run_partitioned(&keys, &original_df, state, self.from_partitioned_ds)? {
+                println!("execute_impl: cannot partitioned");
                 return group_by_helper(
                     original_df,
                     keys,
@@ -380,7 +382,8 @@ impl Executor for PartitionGroupByExec {
             self.execute_impl(state, original_df)
         }?;
 
-        let gb = state.group_tuples.read().unwrap().get("proxy").cloned();
+        // bug: the content has been tampered.
+        let gb = Some(state.last_used_groupby.clone());
         let plan_arg = PlanArgument {
             argument: Some(Argument::Aggregate(AggregateArgument {
                 keys: self
@@ -394,9 +397,26 @@ impl Executor for PartitionGroupByExec {
                     .map(|e| e.get_uuid().to_bytes_le().to_vec())
                     .collect(),
                 maintain_order: self.maintain_order,
-                group_by_proxy: gb.map(|gb| proxy_to_arg(&gb)),
+                group_by_proxy: gb.map(|gb| GroupByProxy {
+                    first: gb.0,
+                    groups: gb
+                        .1
+                        .into_iter()
+                        .map(|e| Groups {
+                            group: e.iter().map(|&e| e as u64).collect(),
+                        })
+                        .collect(),
+                }),
+                output_schema: self
+                    .output_schema
+                    .get_names()
+                    .into_iter()
+                    .map(|s| s.to_string())
+                    .collect(),
             })),
         };
+
+        println!("sending plan_arg for groupby: {plan_arg:?}");
 
         self.execute_epilogue(state, Some(plan_arg))?;
         Ok(df)

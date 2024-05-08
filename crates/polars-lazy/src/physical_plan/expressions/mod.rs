@@ -32,7 +32,9 @@ pub(crate) use count::*;
 pub(crate) use filter::*;
 pub(crate) use literal::*;
 use polars_core::prelude::*;
+use polars_io::ipc::IpcStreamWriter;
 use polars_io::predicates::PhysicalIoExpr;
+use polars_io::SerWriter;
 #[cfg(feature = "dynamic_group_by")]
 pub(crate) use rolling::RollingExpr;
 pub(crate) use slice::*;
@@ -729,4 +731,26 @@ pub trait PartitionedAggregation: Send + Sync + PhysicalExpr {
         groups: &GroupsProxy,
         state: &ExecutionState,
     ) -> PolarsResult<Series>;
+}
+
+pub(crate) fn inputs_as_arrow(inputs: &[Series]) -> PolarsResult<Vec<u8>> {
+    let bytes = {
+        let mut v = vec![];
+        let mut ipc_writer = IpcStreamWriter::new(&mut v);
+
+        let mut columns = vec![];
+        let max_len = inputs.iter().map(|s| s.len()).max().unwrap_or(0);
+        for col in inputs.iter() {
+            columns.push(match col.len() == max_len {
+                true => col.clone(),
+                false => col.new_from_index(0, max_len),
+            })
+        }
+
+        let mut df = DataFrame::new(columns)?;
+        ipc_writer.finish(&mut df)?;
+
+        v
+    };
+    Ok(bytes)
 }

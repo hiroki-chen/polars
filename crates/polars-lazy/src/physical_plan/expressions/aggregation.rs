@@ -5,8 +5,8 @@ use arrow::compute::concatenate::concatenate;
 use arrow::legacy::utils::CustomIterTools;
 use arrow::offset::Offsets;
 use picachv::expr_argument::Argument;
-use picachv::native::build_expr;
-use picachv::{AggExpr, ExprArgument, SumExpr};
+use picachv::native::{build_expr, reify_expression};
+use picachv::{AggExpr, ExprArgument};
 use polars_core::prelude::*;
 use polars_core::utils::NoNull;
 #[cfg(feature = "dtype-struct")]
@@ -55,10 +55,11 @@ fn arg_to_expr(
     let input_uuid = expr.get_uuid().to_bytes_le().to_vec();
     let arg = ExprArgument {
         argument: Some(Argument::Agg(AggExpr {
-            expr: Some(match agg_type {
-                GroupByMethod::Sum => picachv::agg_expr::Expr::Sum(SumExpr { input_uuid }),
+            input_uuid,
+            method: match agg_type {
+                GroupByMethod::Sum => picachv::GroupByMethod::Sum,
                 _ => polars_bail!(ComputeError: "Aggregation method not supported: {:?}", agg_type),
-            }),
+            } as _,
         })),
     };
 
@@ -125,6 +126,10 @@ impl PhysicalExpr for AggregationExpr {
                 GroupByMethod::Sum => {
                     let (s, groups) = ac.get_final_aggregation();
                     let agg_s = s.agg_sum(&groups);
+                    let bytes = inputs_as_arrow(&[agg_s.clone()])?;
+                    reify_expression(state.ctx_id, self.expr_uuid, &bytes)
+                        .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+
                     AggregatedScalar(rename_series(agg_s, &keep_name))
                 },
                 GroupByMethod::Count { include_nulls } => {

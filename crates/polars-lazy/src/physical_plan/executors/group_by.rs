@@ -1,5 +1,6 @@
 use picachv::group_by_proxy::Groups;
-use picachv::GroupByProxy;
+use picachv::plan_argument::Argument;
+use picachv::{AggregateArgument, GroupByProxy, PlanArgument};
 use rayon::prelude::*;
 
 use super::*;
@@ -10,15 +11,24 @@ pub(super) fn evaluate_aggs(
     groups: &GroupsProxy,
     state: &ExecutionState,
 ) -> PolarsResult<Vec<Series>> {
-    POOL.install(|| {
-        aggs.par_iter()
-            .map(|expr| {
-                let agg = expr.evaluate_on_groups(df, groups, state)?.finalize();
-                polars_ensure!(agg.len() == groups.len(), agg_len = agg.len(), groups.len());
-                Ok(agg)
-            })
-            .collect::<PolarsResult<Vec<_>>>()
-    })
+    // POOL.install(|| {
+    //     aggs.par_iter()
+    //         .map(|expr| {
+    //             let agg = expr.evaluate_on_groups(df, groups, state)?.finalize();
+    //             polars_ensure!(agg.len() == groups.len(), agg_len = agg.len(), groups.len());
+    //             Ok(agg)
+    //         })
+    //         .collect::<PolarsResult<Vec<_>>>()
+    // })
+
+    // For debugging.
+    aggs.iter()
+        .map(|expr| {
+            let agg = expr.evaluate_on_groups(df, groups, state)?.finalize();
+            polars_ensure!(agg.len() == groups.len(), agg_len = agg.len(), groups.len());
+            Ok(agg)
+        })
+        .collect::<PolarsResult<Vec<_>>>()
 }
 
 /// Take an input Executor and a multiple expressions
@@ -61,10 +71,12 @@ pub(super) fn group_by_helper(
     keys: Vec<Series>,
     aggs: &[Arc<dyn PhysicalExpr>],
     apply: Option<Arc<dyn DataFrameUdf>>,
-    state: &ExecutionState,
+    state: &mut ExecutionState,
     maintain_order: bool,
     slice: Option<(i64, usize)>,
 ) -> PolarsResult<DataFrame> {
+    println!("group_by_helper");
+
     df.as_single_chunk_par();
     let gb = df.group_by_with_series(keys, true, maintain_order)?;
 
@@ -74,14 +86,16 @@ pub(super) fn group_by_helper(
     }
 
     let mut groups = gb.get_groups();
-    // Write into the state so that we can get it later.
-    state
-        .group_tuples
-        .write()
-        .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?
-        .insert("proxy".into(), groups.clone());
 
-    println!("PartitionGroupByExec: execute_impl: groups {:?}", groups);
+    // Do not clone here since doing so will cause data corruption (we don't know why).
+    if let GroupsProxy::Idx(idx) = groups {
+        state.last_used_groupby.0 = idx.first().iter().map(|&e| e as u64).collect();
+        state.last_used_groupby.1 = idx
+            .all()
+            .iter()
+            .map(|e| e.iter().map(|&e| e as u64).collect())
+            .collect();
+    }
 
     #[allow(unused_assignments)]
     // it is unused because we only use it to keep the lifetime of sliced_group valid
@@ -92,13 +106,17 @@ pub(super) fn group_by_helper(
         groups = sliced_groups.as_deref().unwrap();
     }
 
-    let (mut columns, agg_columns) = POOL.install(|| {
-        let get_columns = || gb.keys_sliced(slice);
+    // let (mut columns, agg_columns) = POOL.install(|| {
+    //     let get_columns = || gb.keys_sliced(slice);
 
-        let get_agg = || evaluate_aggs(&df, aggs, groups, state);
+    //     let get_agg = || evaluate_aggs(&df, aggs, groups, state);
 
-        rayon::join(get_columns, get_agg)
-    });
+    //     rayon::join(get_columns, get_agg)
+    // });
+    let (mut columns, agg_columns) = (
+        gb.keys_sliced(slice),
+        evaluate_aggs(&df, aggs, groups, state),
+    );
     let agg_columns = agg_columns?;
 
     columns.extend_from_slice(&agg_columns);
@@ -106,7 +124,13 @@ pub(super) fn group_by_helper(
 }
 
 impl GroupByExec {
-    fn execute_impl(&mut self, state: &ExecutionState, df: DataFrame) -> PolarsResult<DataFrame> {
+    fn execute_impl(
+        &mut self,
+        state: &mut ExecutionState,
+        df: DataFrame,
+    ) -> PolarsResult<DataFrame> {
+        println!("execute_impl in GroupByExec");
+
         let keys = self
             .keys
             .iter()
@@ -150,24 +174,50 @@ impl Executor for GroupByExec {
             Cow::Borrowed("")
         };
 
-        if state.has_node_timer() {
+        let df = if state.has_node_timer() {
             let new_state = state.clone();
             new_state.record(|| self.execute_impl(state, df), profile_name)
         } else {
             self.execute_impl(state, df)
-        }
-    }
-}
+        }?;
 
-pub(crate) fn proxy_to_arg(gb: &GroupsProxy) -> GroupByProxy {
-    let gb = gb.clone().into_idx();
+        let gb = Some(state.last_used_groupby.clone());
+        let plan_arg = PlanArgument {
+            argument: Some(Argument::Aggregate(AggregateArgument {
+                keys: self
+                    .keys
+                    .iter()
+                    .map(|e| e.get_uuid().to_bytes_le().to_vec())
+                    .collect(),
+                aggs_uuid: self
+                    .aggs
+                    .iter()
+                    .map(|e| e.get_uuid().to_bytes_le().to_vec())
+                    .collect(),
+                maintain_order: self.maintain_order,
+                group_by_proxy: gb.map(|gb| GroupByProxy {
+                    first: gb.0,
+                    groups: gb
+                        .1
+                        .into_iter()
+                        .map(|e| Groups {
+                            group: e.iter().map(|&e| e as u64).collect(),
+                        })
+                        .collect(),
+                }),
+                output_schema: self
+                    .input_schema
+                    .get_names()
+                    .into_iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+            })),
+        };
 
-    GroupByProxy {
-        first: gb.first().to_vec(),
-        groups: gb
-            .all()
-            .into_iter()
-            .map(|e| Groups { group: e.to_vec() })
-            .collect(),
+        println!("sending plan_arg for groupby: {plan_arg:?}");
+
+        self.execute_epilogue(state, Some(plan_arg))?;
+
+        Ok(df)
     }
 }

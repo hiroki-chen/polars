@@ -3,10 +3,8 @@ use std::borrow::Cow;
 use picachv::native::{build_expr, reify_expression};
 use polars_core::prelude::*;
 use polars_core::POOL;
-use polars_io::ipc::IpcStreamWriter;
 #[cfg(feature = "parquet")]
 use polars_io::predicates::{BatchStats, StatsEvaluator};
-use polars_io::SerWriter;
 #[cfg(feature = "is_between")]
 use polars_ops::prelude::ClosedInterval;
 use rayon::prelude::*;
@@ -348,24 +346,7 @@ impl PhysicalExpr for ApplyExpr {
             self.inputs.iter().map(f).collect::<PolarsResult<Vec<_>>>()
         }?;
 
-        let bytes = {
-            let mut v = vec![];
-            let mut ipc_writer = IpcStreamWriter::new(&mut v);
-
-            let mut columns = vec![];
-            let max_len = inputs.iter().map(|s| s.len()).max().unwrap_or(0);
-            for col in inputs.iter() {
-                columns.push(match col.len() == max_len {
-                    true => col.clone(),
-                    false => col.new_from_index(0, max_len),
-                })
-            }
-
-            let mut df = DataFrame::new(columns)?;
-            ipc_writer.finish(&mut df)?;
-
-            v
-        };
+        let bytes = inputs_as_arrow(&inputs)?;
 
         reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
             PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
@@ -386,6 +367,11 @@ impl PhysicalExpr for ApplyExpr {
         groups: &'a GroupsProxy,
         state: &ExecutionState,
     ) -> PolarsResult<AggregationContext<'a>> {
+        println!(
+            "evaluate_on_groups for applyexpr, inputs len: {}",
+            self.inputs.len()
+        );
+
         polars_ensure!(
             self.allow_group_aware,
             expr = self.expr,
@@ -394,7 +380,7 @@ impl PhysicalExpr for ApplyExpr {
         if self.inputs.len() == 1 {
             let mut ac = self.inputs[0].evaluate_on_groups(df, groups, state)?;
 
-            match self.collect_groups {
+            let ac = match self.collect_groups {
                 ApplyOptions::ApplyList => {
                     let s = self.eval_and_flatten(&mut [ac.aggregated()])?;
                     ac.with_series(s, true, Some(&self.expr))?;
@@ -402,9 +388,22 @@ impl PhysicalExpr for ApplyExpr {
                 },
                 ApplyOptions::GroupWise => self.apply_single_group_aware(ac),
                 ApplyOptions::ElementWise => self.apply_single_elementwise(ac),
-            }
+            }?;
+
+            let bytes = inputs_as_arrow(&[ac.series().clone()])?;
+            reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
+                PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
+            })?;
+
+            Ok(ac)
         } else {
             let mut acs = self.prepare_multiple_inputs(df, groups, state)?;
+
+            let values = acs.iter().map(|ac| ac.series().clone()).collect::<Vec<_>>();
+            let bytes = inputs_as_arrow(&values)?;
+            reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
+                PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
+            })?;
 
             match self.collect_groups {
                 ApplyOptions::ApplyList => {
@@ -430,7 +429,7 @@ impl PhysicalExpr for ApplyExpr {
                         }
                     }
                     if has_agg_list || (has_agg_scalar && has_not_agg) {
-                        return self.apply_multiple_group_aware(acs, df);
+                        self.apply_multiple_group_aware(acs, df)
                     } else {
                         apply_multiple_elementwise(
                             acs,
