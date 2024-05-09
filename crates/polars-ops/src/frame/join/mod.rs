@@ -30,6 +30,8 @@ pub use hash_join::*;
 use hashbrown::hash_map::{Entry, RawEntryMut};
 #[cfg(feature = "merge_sorted")]
 pub use merge_sorted::_merge_sorted_dfs;
+use picachv::join_information::RowJoinInformation;
+use picachv::JoinInformation;
 use polars_core::hashing::_HASHMAP_INIT_SIZE;
 #[allow(unused_imports)]
 use polars_core::prelude::sort::arg_sort_multiple::{
@@ -99,7 +101,15 @@ pub trait DataFrameJoinOps: IntoDf {
         }
         let selected_left = df_left.select_series(left_on)?;
         let selected_right = other.select_series(right_on)?;
-        self._join_impl(other, selected_left, selected_right, args, true, false)
+        self._join_impl(
+            other,
+            selected_left,
+            selected_right,
+            args,
+            true,
+            false,
+            &mut Default::default(),
+        )
     }
 
     #[doc(hidden)]
@@ -113,8 +123,10 @@ pub trait DataFrameJoinOps: IntoDf {
         mut args: JoinArgs,
         _check_rechunk: bool,
         _verbose: bool,
+        ti: &mut JoinInformation,
     ) -> PolarsResult<DataFrame> {
         let left_df = self.to_df();
+        println!("_join_impl: {left_df:?} join {other:?} with {selected_left:?} and {selected_right:?} and {args:?} and {_check_rechunk:?} and {_verbose:?}");
         args.validation.is_valid_join(&args.how)?;
 
         #[cfg(feature = "cross_join")]
@@ -157,6 +169,7 @@ pub trait DataFrameJoinOps: IntoDf {
                     args,
                     false,
                     _verbose,
+                    ti,
                 );
             }
         }
@@ -203,9 +216,8 @@ pub trait DataFrameJoinOps: IntoDf {
             let s_left = &selected_left[0];
             let s_right = &selected_right[0];
             return match args.how {
-                JoinType::Inner => {
-                    left_df._inner_join_from_series(other, s_left, s_right, args, _verbose, None)
-                },
+                JoinType::Inner => left_df
+                    ._inner_join_from_series(other, s_left, s_right, args, _verbose, None, ti),
                 JoinType::Left => {
                     left_df._left_join_from_series(other, s_left, s_right, args, _verbose, None)
                 },
@@ -303,6 +315,7 @@ pub trait DataFrameJoinOps: IntoDf {
                 args,
                 _verbose,
                 Some(&names_right),
+                ti,
             ),
             JoinType::Left => left_df._left_join_from_series(
                 other,
@@ -320,6 +333,7 @@ pub trait DataFrameJoinOps: IntoDf {
                 args,
                 _check_rechunk,
                 _verbose,
+                ti,
             ),
         }
     }
@@ -429,6 +443,7 @@ trait DataFrameJoinOpsPrivate: IntoDf {
         args: JoinArgs,
         verbose: bool,
         drop_names: Option<&[&str]>,
+        ti: &mut JoinInformation,
     ) -> PolarsResult<DataFrame> {
         let left_df = self.to_df();
         #[cfg(feature = "dtype-categorical")]
@@ -436,6 +451,7 @@ trait DataFrameJoinOpsPrivate: IntoDf {
         let ((join_tuples_left, join_tuples_right), sorted) =
             _sort_or_hash_inner(s_left, s_right, verbose, args.validation, args.join_nulls)?;
 
+        // These are the indices of the join operation for the left and right DataFrame.
         let mut join_tuples_left = &*join_tuples_left;
         let mut join_tuples_right = &*join_tuples_right;
 
@@ -443,6 +459,27 @@ trait DataFrameJoinOpsPrivate: IntoDf {
             join_tuples_left = slice_slice(join_tuples_left, offset, len);
             join_tuples_right = slice_slice(join_tuples_right, offset, len);
         }
+
+        // This is actucally the indices from the left and right DataFrame.
+        println!(
+            "join_tuples_left = {join_tuples_left:?}, join_tuples_right = {join_tuples_right:?}"
+        );
+
+        polars_ensure!(
+            join_tuples_left.len() == join_tuples_right.len(),
+            ComputeError: "Internal error: join tuples are not equal length",
+        );
+
+        let row_info = join_tuples_left
+            .into_iter()
+            .zip(join_tuples_right.into_iter())
+            .map(|(l, r)| RowJoinInformation {
+                left_row: *l as _,
+                right_row: *r as _,
+            })
+            .collect::<Vec<_>>();
+
+        ti.row_join_info = row_info;
 
         let (df_left, df_right) = POOL.join(
             // SAFETY: join indices are known to be in bounds
@@ -456,7 +493,8 @@ trait DataFrameJoinOpsPrivate: IntoDf {
                 ._take_unchecked_slice(join_tuples_right, true)
             },
         );
-        _finish_join(df_left, df_right, args.suffix.as_deref())
+
+        _finish_join(df_left, df_right, args.suffix.as_deref(), ti)
     }
 }
 

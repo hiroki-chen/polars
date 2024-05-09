@@ -1,3 +1,5 @@
+use picachv::join_information::RenamingInformation;
+
 use super::*;
 use crate::series::coalesce_series;
 
@@ -15,6 +17,7 @@ pub fn _finish_join(
     mut df_left: DataFrame,
     mut df_right: DataFrame,
     suffix: Option<&str>,
+    ti: &mut JoinInformation,
 ) -> PolarsResult<DataFrame> {
     let mut left_names = PlHashSet::with_capacity(df_left.width());
 
@@ -39,6 +42,11 @@ pub fn _finish_join(
             - renaming the column prior to joining\n\
             - using the `suffix` parameter to specify a suffix different to the default one ('_right')", new_name)
         })?;
+
+        ti.renaming.push(RenamingInformation {
+            old_name: name,
+            new_name,
+        });
     }
 
     drop(left_names);

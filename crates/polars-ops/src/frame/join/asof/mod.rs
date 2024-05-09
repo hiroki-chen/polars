@@ -286,7 +286,7 @@ pub trait AsofJoin: IntoDf {
         // SAFETY: join tuples are in bounds.
         let right_df = unsafe { other.take_unchecked(&take_idx) };
 
-        _finish_join(left, right_df, suffix.as_deref())
+        _finish_join(left, right_df, suffix.as_deref(), &mut Default::default())
     }
 
     /// This is similar to a left-join except that we match on nearest key rather than equal keys.

@@ -531,19 +531,24 @@ pub fn create_physical_plan(
 
             let input_left = create_physical_plan(input_left, lp_arena, expr_arena, ctx_id)?;
             let input_right = create_physical_plan(input_right, lp_arena, expr_arena, ctx_id)?;
+
+            let mut lhs_state = ExpressionConversionState::default();
+            let mut rhs_state = ExpressionConversionState::default();
+            lhs_state.set_ctx_id(ctx_id);
+            rhs_state.set_ctx_id(ctx_id);
             let left_on = create_physical_expressions_from_irs(
                 &left_on,
                 Context::Default,
                 expr_arena,
                 None,
-                &mut Default::default(),
+                &mut lhs_state,
             )?;
             let right_on = create_physical_expressions_from_irs(
                 &right_on,
                 Context::Default,
                 expr_arena,
                 None,
-                &mut Default::default(),
+                &mut rhs_state,
             )?;
             let options = Arc::try_unwrap(options).unwrap_or_else(|options| (*options).clone());
             Ok(Box::new(executors::JoinExec::new(

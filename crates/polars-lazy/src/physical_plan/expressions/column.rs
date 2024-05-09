@@ -25,10 +25,10 @@ impl ColumnExpr {
         schema: Option<SchemaRef>,
         ctx_id: Uuid,
     ) -> PolarsResult<Self> {
-        let schema = match schema {
-            None => unimplemented!("schema should be known"),
-            Some(schema) => schema.clone(),
-        };
+        // let schema = match schema {
+        //     None => unimplemented!("schema should be known"),
+        //     Some(schema) => schema.clone(),
+        // };
 
         let expr_arg = ExprArgument {
             argument: Some(picachv::expr_argument::Argument::Column(
@@ -48,7 +48,7 @@ impl ColumnExpr {
         Ok(Self {
             name,
             expr,
-            schema: Some(schema),
+            schema,
             expr_id,
         })
     }

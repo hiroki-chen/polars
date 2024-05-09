@@ -128,7 +128,7 @@ impl Executor for UnionExec {
 
         state
             .transform
-            .push_union(active_df_uuids)
+            .push_union(active_df_uuids[0], active_df_uuids[1])
             .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
         self.execute_epilogue(state, None)?;
 

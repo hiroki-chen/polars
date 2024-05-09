@@ -3230,6 +3230,7 @@ dependencies = [
  "jsonpath_lib_polars_vendor",
  "memchr",
  "num-traits",
+ "picachv",
  "polars-arrow",
  "polars-compute",
  "polars-core",

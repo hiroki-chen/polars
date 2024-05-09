@@ -127,7 +127,7 @@ pub trait CrossJoin: IntoDf {
     ) -> PolarsResult<DataFrame> {
         let (l_df, r_df) = self.cross_join_dfs(other, slice, true)?;
 
-        _finish_join(l_df, r_df, suffix)
+        _finish_join(l_df, r_df, suffix, &mut Default::default())
     }
 }
 

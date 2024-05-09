@@ -661,7 +661,7 @@ pub trait AsofJoinBy: IntoDf {
         let right_df =
             unsafe { proj_other_df.take_unchecked(&IdxCa::with_chunk("", right_join_tuples)) };
 
-        _finish_join(left, right_df, suffix)
+        _finish_join(left, right_df, suffix, &mut Default::default())
     }
 
     /// This is similar to a left-join except that we match on nearest key

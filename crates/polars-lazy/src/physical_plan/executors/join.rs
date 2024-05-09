@@ -1,4 +1,6 @@
+use picachv::{transform_info::{information, Information}, JoinInformation};
 use polars_ops::frame::DataFrameJoinOps;
+use uuid::Uuid;
 
 use super::*;
 
@@ -47,29 +49,45 @@ impl Executor for JoinExec {
         let mut input_left = self.input_left.take().unwrap();
         let mut input_right = self.input_right.take().unwrap();
 
-        let (df_left, df_right) = if self.parallel {
+        let mut lhs_df_uuid = Uuid::default();
+        let mut rhs_df_uuid = Uuid::default();
+
+        let (mut df_left, mut df_right) = if self.parallel {
             let mut state_right = state.split();
             let mut state_left = state.split();
             state_right.branch_idx += 1;
             // propagate the fetch_rows static value to the spawning threads.
             let fetch_rows = FETCH_ROWS.with(|fetch_rows| fetch_rows.get());
 
-            POOL.join(
-                move || {
+            let (df_left, df_right) = POOL.join(
+                 || {
                     FETCH_ROWS.with(|fr| fr.set(fetch_rows));
                     input_left.execute(&mut state_left)
                 },
-                move || {
+                 || {
                     FETCH_ROWS.with(|fr| fr.set(fetch_rows));
                     input_right.execute(&mut state_right)
                 },
-            )
-        } else {
-            (input_left.execute(state), input_right.execute(state))
-        };
+            );
 
-        let mut df_left = df_left?;
-        let mut df_right = df_right?;
+            let df_left = df_left?;
+            let df_right = df_right?;
+
+            lhs_df_uuid = state_left.active_df_uuid;
+            rhs_df_uuid = state_right.active_df_uuid;
+
+            (df_left, df_right)
+        } else {
+            let mut state_right = state.split();
+            let mut state_left = state.split();
+
+            let (df_left, df_right) = (input_left.execute(&mut state_left)?, input_right.execute(&mut state_right)?);
+
+            lhs_df_uuid = state_left.active_df_uuid;
+            rhs_df_uuid = state_right.active_df_uuid;
+
+            (df_left, df_right)
+        };        
 
         let profile_name = if state.has_node_timer() {
             let by = self
@@ -83,8 +101,7 @@ impl Executor for JoinExec {
             Cow::Borrowed("")
         };
 
-        state.record(|| {
-
+        let (df, mut ti) = state.record(|| {
             let left_on_series = self
                 .left_on
                 .iter()
@@ -145,6 +162,14 @@ impl Executor for JoinExec {
                 }
             }
 
+            let mut ti = JoinInformation::default();
+            ti.left_on = left_on_series.iter().map(|s| s.name().to_string()).collect();
+            ti.right_on = right_on_series.iter().map(|s| s.name().to_string()).collect();
+            ti.lhs_df_uuid = lhs_df_uuid.to_bytes_le().to_vec();
+            ti.rhs_df_uuid = rhs_df_uuid.to_bytes_le().to_vec();
+            ti.lhs_input_schema = df_left.get_column_names().into_iter().map(|s| s.into()).collect();
+            ti.rhs_input_schema = df_right.get_column_names().into_iter().map(|s| s.into()).collect();
+
             let df = df_left._join_impl(
                 &df_right,
                 left_on_series,
@@ -152,13 +177,28 @@ impl Executor for JoinExec {
                 self.args.clone(),
                 true,
                 state.verbose(),
+                &mut ti
             );
 
             if state.verbose() {
                 eprintln!("{:?} join dataframes finished", self.args.how);
             };
-            df
+            
+            match df {
+                Ok(df) => Ok((df, ti)),
+                Err(e) => {
+                    if state.verbose() {
+                        eprintln!("{:?}", e)
+                    }
+                    return Err(e);
+                }
+            }
 
-        }, profile_name)
+        }, profile_name)?;
+
+        state.transform.trans_info.push(Information { information: Some(information::Information::Join(ti)) });
+        self.execute_epilogue(state, None)?;
+
+        Ok(df)
     }
 }

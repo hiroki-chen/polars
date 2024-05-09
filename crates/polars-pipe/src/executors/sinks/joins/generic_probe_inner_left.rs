@@ -113,7 +113,12 @@ impl<K: ExtraPayload> GenericJoinProbe<K> {
     ) -> PolarsResult<DataFrame> {
         Ok(match &self.output_names {
             None => {
-                let out = _finish_join(left_df, right_df, Some(self.suffix.as_ref()))?;
+                let out = _finish_join(
+                    left_df,
+                    right_df,
+                    Some(self.suffix.as_ref()),
+                    &mut Default::default(),
+                )?;
                 self.output_names = Some(out.get_column_names_owned());
                 out
             },

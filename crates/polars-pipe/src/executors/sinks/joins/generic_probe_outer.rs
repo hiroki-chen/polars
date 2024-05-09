@@ -111,7 +111,8 @@ impl<K: ExtraPayload> GenericOuterJoinProbe<K> {
             };
             Ok(match output_names {
                 None => {
-                    let out = _finish_join(left_df, right_df, Some(suffix))?;
+                    let out =
+                        _finish_join(left_df, right_df, Some(suffix), &mut Default::default())?;
                     *output_names = Some(out.get_column_names_owned());
                     out
                 },

@@ -128,9 +128,6 @@ impl Executor for DataFrameExec {
             Some(limit) => df.head(Some(limit)),
             None => df,
         };
-        state.transform.push_dummy(uuid).map_err(
-            |e| polars_err!(ComputeError: format!("Could not push dummy transform: {}", e)),
-        )?;
 
         let plan_arg = PlanArgument {
             argument: Some(plan_argument::Argument::GetData(GetDataArgument {

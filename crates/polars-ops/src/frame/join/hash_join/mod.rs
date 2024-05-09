@@ -159,7 +159,12 @@ pub trait JoinDispatch: IntoDf {
         };
         let (df_left, df_right) = POOL.join(materialize_left, materialize_right);
 
-        _finish_join(df_left, df_right, suffix.as_deref())
+        _finish_join(
+            df_left,
+            df_right,
+            suffix.as_deref(),
+            &mut Default::default(),
+        )
     }
 
     fn _left_join_from_series(
@@ -274,7 +279,12 @@ pub trait JoinDispatch: IntoDf {
         let JoinType::Outer { coalesce } = args.how else {
             unreachable!()
         };
-        let out = _finish_join(df_left, df_right, args.suffix.as_deref());
+        let out = _finish_join(
+            df_left,
+            df_right,
+            args.suffix.as_deref(),
+            &mut Default::default(),
+        );
         if coalesce {
             Ok(_coalesce_outer_join(
                 out?,

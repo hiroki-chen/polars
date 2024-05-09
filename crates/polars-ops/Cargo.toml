@@ -10,14 +10,21 @@ description = "More operations on Polars data structures"
 
 [dependencies]
 polars-compute = { workspace = true }
-polars-core = { workspace = true, features = ["algorithm_group_by", "zip_with"] }
+polars-core = { workspace = true, features = [
+  "algorithm_group_by",
+  "zip_with",
+] }
 polars-error = { workspace = true }
 polars-json = { workspace = true, optional = true }
 polars-utils = { workspace = true }
 
+picachv = { workspace = true }
+
 ahash = { workspace = true }
 aho-corasick = { workspace = true, optional = true }
-argminmax = { version = "0.6.2", default-features = false, features = ["float"] }
+argminmax = { version = "0.6.2", default-features = false, features = [
+  "float",
+] }
 arrow = { workspace = true }
 base64 = { workspace = true, optional = true }
 bytemuck = { workspace = true }
