@@ -156,6 +156,7 @@ impl Executor for ProjectionExec {
                     .map(|e| e.get_uuid().to_bytes_le().to_vec())
                     .collect(),
             })),
+            transform_info: state.transform.clone(),
         };
         self.execute_epilogue(state, Some(plan_arg))?;
         println!("after scan: uuid = {}", state.active_df_uuid);

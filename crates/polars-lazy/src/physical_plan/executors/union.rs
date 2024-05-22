@@ -1,3 +1,5 @@
+use picachv::plan_argument::Argument;
+use picachv::{PlanArgument, TransformArgument, TransformInfo};
 use polars_core::utils::concat_df;
 use polars_plan::global::_is_fetch_query;
 
@@ -126,11 +128,16 @@ impl Executor for UnionExec {
             df
         })?;
 
-        state
-            .transform
-            .push_union(active_df_uuids[0], active_df_uuids[1])
-            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
-        self.execute_epilogue(state, None)?;
+        state.transform.replace(
+            TransformInfo::from_union(active_df_uuids[0], active_df_uuids[1])
+                .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?,
+        );
+        let arg = PlanArgument {
+            argument: Some(Argument::Transform(TransformArgument {})),
+            transform_info: state.transform.clone(),
+        };
+
+        self.execute_epilogue(state, Some(arg))?;
 
         Ok(out)
     }

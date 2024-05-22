@@ -22,12 +22,11 @@ pub trait Executor: Send {
             cache.ctx_id,
             cache.active_df_uuid,
             plan_arg,
-            cache.transform.clone(),
         )
         .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
         println!("setting to {active_df_uuid}");
         cache.set_active_df_uuid(active_df_uuid);
-        cache.transform.trans_info.clear();
+        cache.transform.take();
 
         Ok(())
     }

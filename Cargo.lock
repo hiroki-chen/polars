@@ -2821,6 +2821,7 @@ dependencies = [
  "picachv-error",
  "picachv-message",
  "picachv-monitor",
+ "prost 0.12.4",
  "uuid",
 ]
 

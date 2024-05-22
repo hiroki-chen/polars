@@ -1,5 +1,5 @@
 use picachv::plan_argument::Argument;
-use picachv::{PlanArgument, SelectArgument};
+use picachv::{PlanArgument, SelectArgument, TransformInfo};
 use polars_core::utils::accumulate_dataframes_vertical_unchecked;
 
 use super::*;
@@ -53,10 +53,10 @@ impl FilterExec {
             .map(|e| e.ok_or(PolarsError::ComputeError("Filter downcast failed".into())))
             .collect::<PolarsResult<Vec<_>>>()?;
         let df = df.filter(pred)?;
-        state
-            .transform
-            .push_filter(state.active_df_uuid, &pred_bool)
-            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+        state.transform.replace(
+            TransformInfo::from_filter(&pred_bool)
+                .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?,
+        );
 
         Ok(df)
     }
@@ -86,10 +86,10 @@ impl FilterExec {
             .map(|(_, pred)| pred.clone())
             .flatten()
             .collect::<Vec<_>>();
-        state
-            .transform
-            .push_filter(state.active_df_uuid, &pred_bool)
-            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+        state.transform.replace(
+            TransformInfo::from_filter(&pred_bool)
+                .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?,
+        );
         Ok(accumulate_dataframes_vertical_unchecked(df))
     }
 
@@ -148,6 +148,7 @@ impl Executor for FilterExec {
             argument: Some(Argument::Select(SelectArgument {
                 pred_uuid: self.predicate.get_uuid().to_bytes_le().to_vec(),
             })),
+            transform_info: state.transform.clone(),
         };
         self.execute_epilogue(state, Some(plan_arg))?;
 

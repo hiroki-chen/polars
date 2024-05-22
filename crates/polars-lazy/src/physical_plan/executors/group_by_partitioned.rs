@@ -414,6 +414,7 @@ impl Executor for PartitionGroupByExec {
                     .map(|s| s.to_string())
                     .collect(),
             })),
+            transform_info: state.transform.clone(),
         };
 
         println!("sending plan_arg for groupby: {plan_arg:?}");

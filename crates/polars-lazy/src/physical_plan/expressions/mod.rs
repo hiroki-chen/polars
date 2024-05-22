@@ -75,7 +75,12 @@ pub(crate) fn op_to_binop(op: Operator) -> PolarsResult<picachv::BinaryOperator>
                 picachv::ArithmeticBinaryOperator::Add.into(),
             )),
         }),
-        _ => Err(polars_err!(ComputeError: "operation not supported")),
+        Operator::And => Ok(picachv::BinaryOperator {
+            operator: Some(picachv::binary_operator::Operator::LogicalOperator(
+                picachv::LogicalBinaryOperator::And.into(),
+            )),
+        }),
+        _ => Err(polars_err!(ComputeError: "{op:?} operation not supported")),
     }
 }
 

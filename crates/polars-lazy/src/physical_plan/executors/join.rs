@@ -1,4 +1,4 @@
-use picachv::{transform_info::{information, Information}, JoinInformation};
+use picachv::{transform_info::Information, JoinInformation, TransformInfo};
 use polars_ops::frame::DataFrameJoinOps;
 use uuid::Uuid;
 
@@ -101,7 +101,7 @@ impl Executor for JoinExec {
             Cow::Borrowed("")
         };
 
-        let (df, mut ti) = state.record(|| {
+        let (df, ti) = state.record(|| {
             let left_on_series = self
                 .left_on
                 .iter()
@@ -196,7 +196,9 @@ impl Executor for JoinExec {
 
         }, profile_name)?;
 
-        state.transform.trans_info.push(Information { information: Some(information::Information::Join(ti)) });
+        state.transform.replace(TransformInfo { information: Some(
+            Information::Join(ti)
+        ) });
         self.execute_epilogue(state, None)?;
 
         Ok(df)

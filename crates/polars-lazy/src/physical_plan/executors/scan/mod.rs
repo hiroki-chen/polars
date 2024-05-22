@@ -20,7 +20,8 @@ pub(crate) use ipc::IpcExec;
 #[cfg(feature = "parquet")]
 pub(crate) use parquet::ParquetExec;
 use picachv::get_data_argument::DataSource;
-use picachv::{plan_argument, GetDataArgument, GetDataInMemory, PlanArgument};
+use picachv::get_data_in_memory::{ByName, ProjectionList};
+use picachv::{plan_argument, GetDataArgument, GetDataInMemory, PlanArgument, TransformInfo};
 #[cfg(any(feature = "ipc", feature = "parquet"))]
 use polars_io::predicates::PhysicalIoExpr;
 #[cfg(any(feature = "parquet", feature = "csv", feature = "ipc", feature = "cse"))]
@@ -118,9 +119,9 @@ impl Executor for DataFrameExec {
                     b.ok_or(polars_err!(ComputeError: "filter predicate was not of type boolean"))
                 })
                 .collect::<PolarsResult<Vec<_>>>()?;
-            state.transform.push_filter(uuid, &pred_bool).map_err(
-                |e| polars_err!(ComputeError: format!("Could not push filter transform: {}", e)),
-            )?;
+            state.transform = Some(TransformInfo::from_filter(&pred_bool).map_err(
+                |e| polars_err!(ComputeError: format!("Could not create transform info: {}", e)),
+            )?);
             df = df.filter(mask)?;
         }
 
@@ -137,16 +138,19 @@ impl Executor for DataFrameExec {
                         .selection
                         .as_ref()
                         .map(|e| e.get_uuid().to_bytes_le().to_vec()),
-                    projected_list: self
-                        .projection
-                        .as_ref()
-                        .cloned()
-                        .unwrap_or_default()
-                        .iter()
-                        .map(|s| s.clone())
-                        .collect::<Vec<_>>(),
+                    projection_list: Some(ProjectionList::ByName(ByName {
+                        project_list: self
+                            .projection
+                            .as_ref()
+                            .cloned()
+                            .unwrap_or_default()
+                            .iter()
+                            .map(|s| s.clone())
+                            .collect::<Vec<_>>(),
+                    })),
                 })),
             })),
+            transform_info: state.transform.clone(),
         };
         self.execute_epilogue(state, Some(plan_arg))?;
 

@@ -77,7 +77,7 @@ pub struct ExecutionState {
     // ----- ADDED -------
     pub(super) ctx_id: Uuid,
     pub(super) active_df_uuid: Uuid,
-    pub(super) transform: TransformInfo,
+    pub(super) transform: Option<TransformInfo>,
     pub(super) last_used_groupby: (Vec<u64>, Vec<Vec<u64>>), // calling `idx.clone()` causes data corruption.
 }
 
