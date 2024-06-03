@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 
-use picachv::column_expr::ColumnNameSpecifier;
+use picachv::column_specifier::Column;
 use picachv::native::build_expr;
-use picachv::ExprArgument;
+use picachv::{ColumnSpecifier, ExprArgument};
 use polars_core::prelude::*;
 use polars_plan::constants::CSE_REPLACED;
 use uuid::Uuid;
@@ -25,19 +25,12 @@ impl ColumnExpr {
         schema: Option<SchemaRef>,
         ctx_id: Uuid,
     ) -> PolarsResult<Self> {
-        // let schema = match schema {
-        //     None => unimplemented!("schema should be known"),
-        //     Some(schema) => schema.clone(),
-        // };
-
         let expr_arg = ExprArgument {
             argument: Some(picachv::expr_argument::Argument::Column(
                 picachv::ColumnExpr {
-                    column: Some(picachv::column_expr::Column::ColumnNameSpecifier(
-                        ColumnNameSpecifier {
-                            column_name: name.to_string(),
-                        },
-                    )),
+                    column: Some(ColumnSpecifier {
+                        column: Some(Column::ColumnName(name.to_string())),
+                    }),
                 },
             )),
         };

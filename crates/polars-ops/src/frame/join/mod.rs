@@ -30,8 +30,8 @@ pub use hash_join::*;
 use hashbrown::hash_map::{Entry, RawEntryMut};
 #[cfg(feature = "merge_sorted")]
 pub use merge_sorted::_merge_sorted_dfs;
-use picachv::join_information::RowJoinInformation;
-use picachv::JoinInformation;
+use picachv::join_information::How;
+use picachv::{JoinInformation, RowJoinInformation};
 use polars_core::hashing::_HASHMAP_INIT_SIZE;
 #[allow(unused_imports)]
 use polars_core::prelude::sort::arg_sort_multiple::{
@@ -479,7 +479,9 @@ trait DataFrameJoinOpsPrivate: IntoDf {
             })
             .collect::<Vec<_>>();
 
-        ti.row_join_info = row_info;
+        if let Some(How::JoinByName(how)) = &mut ti.how {
+            how.row_join_info = row_info;
+        }
 
         let (df_left, df_right) = POOL.join(
             // SAFETY: join indices are known to be in bounds
