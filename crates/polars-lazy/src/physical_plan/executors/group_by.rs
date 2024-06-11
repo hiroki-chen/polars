@@ -1,6 +1,7 @@
-use picachv::group_by_proxy::Groups;
+use picachv::group_by_idx::Groups;
+use picachv::group_by_proxy::GroupBy;
 use picachv::plan_argument::Argument;
-use picachv::{AggregateArgument, GroupByProxy, PlanArgument};
+use picachv::{AggregateArgument, GroupByIdx, GroupByProxy, PlanArgument};
 
 use super::*;
 
@@ -180,43 +181,48 @@ impl Executor for GroupByExec {
             self.execute_impl(state, df)
         }?;
 
-        let gb = Some(state.last_used_groupby.clone());
-        let plan_arg = PlanArgument {
-            argument: Some(Argument::Aggregate(AggregateArgument {
-                keys: self
-                    .keys
-                    .iter()
-                    .map(|e| e.get_uuid().to_bytes_le().to_vec())
-                    .collect(),
-                aggs_uuid: self
-                    .aggs
-                    .iter()
-                    .map(|e| e.get_uuid().to_bytes_le().to_vec())
-                    .collect(),
-                maintain_order: self.maintain_order,
-                group_by_proxy: gb.map(|gb| GroupByProxy {
-                    first: gb.0,
-                    groups: gb
-                        .1
-                        .into_iter()
-                        .map(|e| Groups {
-                            group: e.iter().map(|&e| e as u64).collect(),
-                        })
+        if state.policy_check {
+            let gb = Some(state.last_used_groupby.clone());
+            let plan_arg = PlanArgument {
+                argument: Some(Argument::Aggregate(AggregateArgument {
+                    keys: self
+                        .keys
+                        .iter()
+                        .map(|e| e.get_uuid().to_bytes_le().to_vec())
                         .collect(),
-                }),
-                output_schema: self
-                    .input_schema
-                    .get_names()
-                    .into_iter()
-                    .map(|s| s.to_string())
-                    .collect(),
-            })),
-            transform_info: state.transform.clone(),
-        };
+                    aggs_uuid: self
+                        .aggs
+                        .iter()
+                        .map(|e| e.get_uuid().to_bytes_le().to_vec())
+                        .collect(),
+                    maintain_order: self.maintain_order,
+                    group_by_proxy: gb.map(|gb| GroupByProxy {
+                        group_by: Some(GroupBy::GroupByIdx(GroupByIdx {
+                            groups: gb
+                                .0
+                                .iter()
+                                .zip(gb.1.iter())
+                                .map(|e| Groups {
+                                    first: *e.0 as u64,
+                                    group: e.1.iter().cloned().collect(),
+                                })
+                                .collect(),
+                        })),
+                    }),
+                    output_schema: self
+                        .input_schema
+                        .get_names()
+                        .into_iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                })),
+                transform_info: state.transform.clone(),
+            };
 
-        println!("sending plan_arg for groupby: {plan_arg:?}");
+            println!("sending plan_arg for groupby: {plan_arg:?}");
 
-        self.execute_epilogue(state, Some(plan_arg))?;
+            self.execute_epilogue(state, Some(plan_arg))?;
+        }
 
         Ok(df)
     }

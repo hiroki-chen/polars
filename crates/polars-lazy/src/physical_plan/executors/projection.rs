@@ -145,21 +145,23 @@ impl Executor for ProjectionExec {
             self.execute_impl(state, df)
         }?;
 
-        // Must be executed `after` the input is executed otherwise we have no idea
-        // what the uuid of the input is.
-        // self.execute_prologue(state)?;
-        let plan_arg = PlanArgument {
-            argument: Some(Argument::Projection(ProjectionArgument {
-                expression: self
-                    .expr
-                    .iter()
-                    .map(|e| e.get_uuid().to_bytes_le().to_vec())
-                    .collect(),
-            })),
-            transform_info: state.transform.clone(),
-        };
-        self.execute_epilogue(state, Some(plan_arg))?;
-        println!("after scan: uuid = {}", state.active_df_uuid);
+        if state.policy_check {
+            // Must be executed `after` the input is executed otherwise we have no idea
+            // what the uuid of the input is.
+            // self.execute_prologue(state)?;
+            let plan_arg = PlanArgument {
+                argument: Some(Argument::Projection(ProjectionArgument {
+                    expression: self
+                        .expr
+                        .iter()
+                        .map(|e| e.get_uuid().to_bytes_le().to_vec())
+                        .collect(),
+                })),
+                transform_info: state.transform.clone(),
+            };
+            self.execute_epilogue(state, Some(plan_arg))?;
+            println!("after scan: uuid = {}", state.active_df_uuid);
+        }
 
         Ok(df)
     }

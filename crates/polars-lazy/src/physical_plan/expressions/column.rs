@@ -24,19 +24,24 @@ impl ColumnExpr {
         expr: Expr,
         schema: Option<SchemaRef>,
         ctx_id: Uuid,
+        policy_check: bool,
     ) -> PolarsResult<Self> {
-        let expr_arg = ExprArgument {
-            argument: Some(picachv::expr_argument::Argument::Column(
-                picachv::ColumnExpr {
-                    column: Some(ColumnSpecifier {
-                        column: Some(Column::ColumnName(name.to_string())),
-                    }),
-                },
-            )),
-        };
+        let expr_id = if policy_check {
+            let expr_arg = ExprArgument {
+                argument: Some(picachv::expr_argument::Argument::Column(
+                    picachv::ColumnExpr {
+                        column: Some(ColumnSpecifier {
+                            column: Some(Column::ColumnName(name.to_string())),
+                        }),
+                    },
+                )),
+            };
 
-        let expr_id = build_expr(ctx_id, expr_arg)
-            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+            build_expr(ctx_id, expr_arg)
+                .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?
+        } else {
+            Default::default()
+        };
 
         Ok(Self {
             name,

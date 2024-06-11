@@ -74,6 +74,7 @@ impl IntoLazy for LazyFrame {
 #[must_use]
 pub struct LazyFrame {
     pub logical_plan: DslPlan,
+    pub policy_checking_enabled: bool,
     pub(crate) opt_state: OptState,
     pub(crate) ctx_id: Uuid,
 }
@@ -111,6 +112,7 @@ impl LazyFrame {
 
     fn from_logical_plan(logical_plan: DslPlan, opt_state: OptState) -> Self {
         LazyFrame {
+            policy_checking_enabled: false,
             logical_plan,
             opt_state,
             ctx_id: Uuid::nil(),
@@ -124,6 +126,11 @@ impl LazyFrame {
 
     pub fn get_ctx_id(&self) -> Uuid {
         self.ctx_id
+    }
+
+    pub fn set_policy_checking(mut self, enabled: bool) -> Self {
+        self.policy_checking_enabled = enabled;
+        self
     }
 
     /// Get current optimizations.
@@ -610,6 +617,7 @@ impl LazyFrame {
         mut self,
         check_sink: bool,
         ctx_id: Uuid,
+        policy_check: bool,
     ) -> PolarsResult<(ExecutionState, Box<dyn Executor>, bool)> {
         let mut expr_arena = Arena::with_capacity(256);
         let mut lp_arena = Arena::with_capacity(128);
@@ -623,9 +631,11 @@ impl LazyFrame {
         } else {
             true
         };
-        let physical_plan = create_physical_plan(lp_top, &mut lp_arena, &mut expr_arena, ctx_id)?;
+        let physical_plan =
+            create_physical_plan(lp_top, &mut lp_arena, &mut expr_arena, ctx_id, policy_check)?;
 
         let state = ExecutionState::new();
+
         Ok((state, physical_plan, no_file_sink))
     }
 
@@ -648,11 +658,18 @@ impl LazyFrame {
     /// ```
     pub fn collect(self) -> PolarsResult<DataFrame> {
         let ctx_id = self.ctx_id;
-        let (mut state, mut physical_plan, _) = self.prepare_collect(false, ctx_id)?;
+        let policy_check = self.policy_checking_enabled;
+
+        let (mut state, mut physical_plan, _) =
+            self.prepare_collect(false, ctx_id, policy_check)?;
         state.set_ctx_id(ctx_id);
+        state.set_policy_checking(policy_check);
         let df = physical_plan.execute(&mut state)?;
-        finalize(ctx_id, state.get_active_df_uuid())
-            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+
+        if policy_check {
+            finalize(ctx_id, state.get_active_df_uuid())
+                .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+        }
 
         Ok(df)
     }
@@ -674,7 +691,7 @@ impl LazyFrame {
 
         // Initialize a new context id.
         let ctx_id = open_new().map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
-        let (mut state, mut physical_plan, _) = self.prepare_collect(false, ctx_id)?;
+        let (mut state, mut physical_plan, _) = self.prepare_collect(false, ctx_id, false)?;
         state.set_ctx_id(ctx_id);
         state.time_nodes();
         let out = physical_plan.execute(&mut state)?;
@@ -804,7 +821,7 @@ impl LazyFrame {
             payload,
         };
         let (mut state, mut physical_plan, is_streaming) =
-            self.prepare_collect(true, Uuid::nil())?;
+            self.prepare_collect(true, Uuid::nil(), false)?;
         polars_ensure!(
             is_streaming,
             ComputeError: format!("cannot run the whole query in a streaming order; \

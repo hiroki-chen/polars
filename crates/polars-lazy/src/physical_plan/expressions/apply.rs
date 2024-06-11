@@ -39,32 +39,25 @@ impl ApplyExpr {
         allow_threading: bool,
         input_schema: Option<SchemaRef>,
         ctx_id: Uuid,
+        policy_check: bool,
     ) -> PolarsResult<Self> {
         #[cfg(debug_assertions)]
         if matches!(options.collect_groups, ApplyOptions::ElementWise) && options.returns_scalar {
             panic!("expr {} is not implemented correctly. 'returns_scalar' and 'elementwise' are mutually exclusive", expr)
         }
 
-        println!(
-            "new arguments: {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}",
-            inputs.len(),
-            function,
-            orig_function,
-            expr,
-            options,
-            allow_threading,
-            input_schema,
-            ctx_id
-        );
-
         let uuid = match orig_function.as_ref() {
             Some(f) => {
-                // TODO: Need to give it inputs.
-                let input_uuids = inputs.iter().map(|e| e.get_uuid()).collect::<Vec<_>>();
-                let arg = f.to_expr_argument(&input_uuids)?;
+                if policy_check {
+                    // TODO: Need to give it inputs.
+                    let input_uuids = inputs.iter().map(|e| e.get_uuid()).collect::<Vec<_>>();
+                    let arg = f.to_expr_argument(&input_uuids)?;
 
-                build_expr(ctx_id, arg)
-                    .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?
+                    build_expr(ctx_id, arg)
+                        .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?
+                } else {
+                    Uuid::nil()
+                }
             },
             None => Uuid::nil(),
         };
@@ -346,11 +339,12 @@ impl PhysicalExpr for ApplyExpr {
             self.inputs.iter().map(f).collect::<PolarsResult<Vec<_>>>()
         }?;
 
-        let bytes = inputs_as_arrow(&inputs)?;
-
-        reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
-            PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
-        })?;
+        if state.policy_check {
+            let bytes = inputs_as_arrow(&inputs)?;
+            reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
+                PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
+            })?;
+        }
 
         if self.allow_rename {
             self.eval_and_flatten(&mut inputs)
@@ -390,20 +384,23 @@ impl PhysicalExpr for ApplyExpr {
                 ApplyOptions::ElementWise => self.apply_single_elementwise(ac),
             }?;
 
-            let bytes = inputs_as_arrow(&[ac.series().clone()])?;
-            reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
-                PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
-            })?;
+            if state.policy_check {
+                let bytes = inputs_as_arrow(&[ac.series().clone()])?;
+                reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
+                    PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
+                })?;
+            }
 
             Ok(ac)
         } else {
             let mut acs = self.prepare_multiple_inputs(df, groups, state)?;
-
-            let values = acs.iter().map(|ac| ac.series().clone()).collect::<Vec<_>>();
-            let bytes = inputs_as_arrow(&values)?;
-            reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
-                PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
-            })?;
+            if state.policy_check {
+                let values = acs.iter().map(|ac| ac.series().clone()).collect::<Vec<_>>();
+                let bytes = inputs_as_arrow(&values)?;
+                reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
+                    PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
+                })?;
+            }
 
             match self.collect_groups {
                 ApplyOptions::ApplyList => {

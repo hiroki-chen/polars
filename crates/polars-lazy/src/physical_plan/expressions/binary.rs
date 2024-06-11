@@ -27,21 +27,26 @@ impl BinaryExpr {
         expr: Expr,
         has_literal: bool,
         ctx_id: Uuid,
+        policy_check: bool,
     ) -> PolarsResult<Self> {
-        let lhs_uuid = left.get_uuid();
-        let rhs_uuid = right.get_uuid();
+        let expr_id = if policy_check {
+            let lhs_uuid = left.get_uuid();
+            let rhs_uuid = right.get_uuid();
 
-        let expr_arg = ExprArgument {
-            argument: Some(Argument::Binary(picachv::BinaryExpr {
-                left_uuid: lhs_uuid.to_bytes_le().to_vec(),
-                op: Some(op_to_binop(op)?),
-                right_uuid: rhs_uuid.to_bytes_le().to_vec(),
-            })),
+            let expr_arg = ExprArgument {
+                argument: Some(Argument::Binary(picachv::BinaryExpr {
+                    left_uuid: lhs_uuid.to_bytes_le().to_vec(),
+                    op: Some(op_to_binop(op)?),
+                    right_uuid: rhs_uuid.to_bytes_le().to_vec(),
+                })),
+            };
+
+            build_expr(ctx_id, expr_arg).map_err(|e| {
+                PolarsError::ComputeError(format!("Could not build expression: {}", e).into())
+            })?
+        } else {
+            Default::default()
         };
-
-        let expr_id = build_expr(ctx_id, expr_arg).map_err(|e| {
-            PolarsError::ComputeError(format!("Could not build expression: {}", e).into())
-        })?;
 
         Ok(Self {
             left,

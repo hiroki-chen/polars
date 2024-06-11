@@ -128,16 +128,19 @@ impl Executor for UnionExec {
             df
         })?;
 
-        state.transform.replace(
-            TransformInfo::from_union(active_df_uuids[0], active_df_uuids[1])
-                .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?,
-        );
-        let arg = PlanArgument {
-            argument: Some(Argument::Transform(TransformArgument {})),
-            transform_info: state.transform.clone(),
-        };
+        if state.policy_check {
+            state.transform.replace(
+                TransformInfo::from_union(active_df_uuids[0], active_df_uuids[1])
+                    .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?,
+            );
 
-        self.execute_epilogue(state, Some(arg))?;
+            let arg = PlanArgument {
+                argument: Some(Argument::Transform(TransformArgument {})),
+                transform_info: state.transform.clone(),
+            };
+
+            self.execute_epilogue(state, Some(arg))?;
+        }
 
         Ok(out)
     }

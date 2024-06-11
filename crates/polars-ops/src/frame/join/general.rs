@@ -1,4 +1,3 @@
-use picachv::join_information::How;
 use picachv::RenamingInformation;
 
 use super::*;
@@ -44,12 +43,10 @@ pub fn _finish_join(
             - using the `suffix` parameter to specify a suffix different to the default one ('_right')", new_name)
         })?;
 
-        if let Some(How::JoinByName(how)) = &mut ti.how {
-            how.renaming.push(RenamingInformation {
-                old_name: name,
-                new_name,
-            });
-        }
+        ti.renaming_info.push(RenamingInformation {
+            old_name: name,
+            new_name,
+        });
     }
 
     drop(left_names);

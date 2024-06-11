@@ -32,12 +32,16 @@ impl AggregationExpr {
         agg_type: GroupByMethod,
         field: Option<Field>,
         ctx_id: Uuid,
+        policy_check: bool,
     ) -> PolarsResult<Self> {
-        // Wrap into another function.
-        let arg = arg_to_expr(&expr, agg_type)?;
+        let expr_uuid = if policy_check {
+            // Wrap into another function.
+            let arg = arg_to_expr(&expr, agg_type)?;
 
-        let expr_uuid =
-            build_expr(ctx_id, arg).map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+            build_expr(ctx_id, arg).map_err(|e| PolarsError::ComputeError(e.to_string().into()))?
+        } else {
+            Default::default()
+        };
 
         Ok(Self {
             input: expr,
@@ -126,9 +130,12 @@ impl PhysicalExpr for AggregationExpr {
                 GroupByMethod::Sum => {
                     let (s, groups) = ac.get_final_aggregation();
                     let agg_s = s.agg_sum(&groups);
-                    let bytes = inputs_as_arrow(&[agg_s.clone()])?;
-                    reify_expression(state.ctx_id, self.expr_uuid, &bytes)
-                        .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+
+                    if state.policy_check {
+                        let bytes = inputs_as_arrow(&[agg_s.clone()])?;
+                        reify_expression(state.ctx_id, self.expr_uuid, &bytes)
+                            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+                    }
 
                     AggregatedScalar(rename_series(agg_s, &keep_name))
                 },

@@ -130,29 +130,31 @@ impl Executor for DataFrameExec {
             None => df,
         };
 
-        let plan_arg = PlanArgument {
-            argument: Some(plan_argument::Argument::GetData(GetDataArgument {
-                data_source: Some(DataSource::InMemory(GetDataInMemory {
-                    df_uuid: state.active_df_uuid.clone().to_bytes_le().to_vec(),
-                    pred: self
-                        .selection
-                        .as_ref()
-                        .map(|e| e.get_uuid().to_bytes_le().to_vec()),
-                    projection_list: Some(ProjectionList::ByName(ByName {
-                        project_list: self
-                            .projection
+        if state.policy_check {
+            let plan_arg = PlanArgument {
+                argument: Some(plan_argument::Argument::GetData(GetDataArgument {
+                    data_source: Some(DataSource::InMemory(GetDataInMemory {
+                        df_uuid: state.active_df_uuid.clone().to_bytes_le().to_vec(),
+                        pred: self
+                            .selection
                             .as_ref()
-                            .cloned()
-                            .unwrap_or_default()
-                            .iter()
-                            .map(|s| s.clone())
-                            .collect::<Vec<_>>(),
+                            .map(|e| e.get_uuid().to_bytes_le().to_vec()),
+                        projection_list: Some(ProjectionList::ByName(ByName {
+                            project_list: self
+                                .projection
+                                .as_ref()
+                                .cloned()
+                                .unwrap_or_default()
+                                .iter()
+                                .map(|s| s.clone())
+                                .collect::<Vec<_>>(),
+                        })),
                     })),
                 })),
-            })),
-            transform_info: state.transform.clone(),
-        };
-        self.execute_epilogue(state, Some(plan_arg))?;
+                transform_info: state.transform.clone(),
+            };
+            self.execute_epilogue(state, Some(plan_arg))?;
+        }
 
         println!("after scan: uuid = {}", state.active_df_uuid);
         Ok(df)

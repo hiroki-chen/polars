@@ -15,13 +15,22 @@ use crate::prelude::*;
 pub struct LiteralExpr(pub LiteralValue, Expr, Uuid);
 
 impl LiteralExpr {
-    pub fn new(value: LiteralValue, expr: Expr, ctx_id: Uuid) -> PolarsResult<Self> {
-        let arg = ExprArgument {
-            argument: Some(Argument::Literal(picachv::LiteralExpr {})),
+    pub fn new(
+        value: LiteralValue,
+        expr: Expr,
+        ctx_id: Uuid,
+        policy_check: bool,
+    ) -> PolarsResult<Self> {
+        let uuid = if policy_check {
+            let arg = ExprArgument {
+                argument: Some(Argument::Literal(picachv::LiteralExpr {})),
+            };
+
+            build_expr(ctx_id, arg).map_err(|e| PolarsError::ComputeError(e.to_string().into()))?
+        } else {
+            Default::default()
         };
 
-        let uuid =
-            build_expr(ctx_id, arg).map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
         Ok(Self(value, expr, uuid))
     }
 }

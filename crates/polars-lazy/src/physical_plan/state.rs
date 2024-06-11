@@ -79,6 +79,7 @@ pub struct ExecutionState {
     pub(super) active_df_uuid: Uuid,
     pub(super) transform: Option<TransformInfo>,
     pub(super) last_used_groupby: (Vec<u64>, Vec<Vec<u64>>), // calling `idx.clone()` causes data corruption.
+    pub(super) policy_check: bool,
 }
 
 impl ExecutionState {
@@ -101,6 +102,7 @@ impl ExecutionState {
             active_df_uuid: Uuid::nil(),
             transform: Default::default(),
             last_used_groupby: Default::default(),
+            policy_check: false,
         }
     }
 
@@ -114,6 +116,10 @@ impl ExecutionState {
 
     pub(crate) fn get_active_df_uuid(&self) -> Uuid {
         self.active_df_uuid
+    }
+
+    pub(crate) fn set_policy_checking(&mut self, policy_check: bool) {
+        self.policy_check = policy_check;
     }
 
     /// Toggle this to measure execution times.
@@ -169,6 +175,7 @@ impl ExecutionState {
             active_df_uuid: self.active_df_uuid,
             transform: self.transform.clone(),
             last_used_groupby: self.last_used_groupby.clone(),
+            policy_check: self.policy_check,
         }
     }
 
@@ -188,6 +195,7 @@ impl ExecutionState {
             active_df_uuid: self.active_df_uuid,
             transform: self.transform.clone(),
             last_used_groupby: self.last_used_groupby.clone(),
+            policy_check: self.policy_check,
         }
     }
 

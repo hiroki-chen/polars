@@ -17,7 +17,7 @@ impl LazyFrame {
 
         // Initialize a new context id.
         let ctx_id = open_new().map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
-        let (mut state, mut physical_plan, _) = self.prepare_collect(false, ctx_id)?;
+        let (mut state, mut physical_plan, _) = self.prepare_collect(false, ctx_id, false)?;
 
         let (tx, rx) = channel();
         let token = state.cancel_token();

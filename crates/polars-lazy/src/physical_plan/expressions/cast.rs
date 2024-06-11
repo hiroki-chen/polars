@@ -27,8 +27,13 @@ impl CastExpr {
         data_type: DataType,
         expr: Expr,
         strict: bool,
+        policy_check: bool,
     ) -> PolarsResult<Self> {
-        let expr_uuid = input.get_uuid();
+        let expr_uuid = if policy_check {
+            input.get_uuid()
+        } else {
+            Default::default()
+        };
 
         Ok(Self {
             input,

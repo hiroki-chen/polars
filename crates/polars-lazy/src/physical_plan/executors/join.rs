@@ -1,4 +1,4 @@
-use picachv::{join_information::How, transform_info::Information, JoinByName, JoinInformation, TransformInfo};
+use picachv::{transform_info::Information, JoinInformation, TransformInfo};
 use polars_ops::frame::DataFrameJoinOps;
 use uuid::Uuid;
 
@@ -163,14 +163,8 @@ impl Executor for JoinExec {
             }
 
             let mut ti = JoinInformation::default();
-            let mut by_name = JoinByName::default();
             ti.lhs_df_uuid = lhs_df_uuid.to_bytes_le().to_vec();
             ti.rhs_df_uuid = rhs_df_uuid.to_bytes_le().to_vec();
-            by_name.left_on = left_on_series.iter().map(|s| s.name().to_string()).collect();
-            by_name.right_on = right_on_series.iter().map(|s| s.name().to_string()).collect();
-            by_name.lhs_input_schema = df_left.get_column_names().into_iter().map(|s| s.into()).collect();
-            by_name.rhs_input_schema = df_right.get_column_names().into_iter().map(|s| s.into()).collect();
-            ti.how = Some(How::JoinByName(by_name));
 
             let df = df_left._join_impl(
                 &df_right,
@@ -198,10 +192,13 @@ impl Executor for JoinExec {
 
         }, profile_name)?;
 
-        state.transform.replace(TransformInfo { information: Some(
-            Information::Join(ti)
-        ) });
-        self.execute_epilogue(state, None)?;
+        if state.policy_check {
+            state.transform.replace(TransformInfo { information: Some(
+                Information::Join(ti)
+            ) });
+            self.execute_epilogue(state, None)?;
+        }
+
 
         Ok(df)
     }

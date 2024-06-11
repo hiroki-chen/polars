@@ -92,6 +92,8 @@ pub(crate) struct ExpressionConversionState {
     local: LocalConversionState,
     // The context id.
     pub(crate) ctx_id: Uuid,
+    // Whether to check policy.
+    pub(crate) policy_check: bool,
 }
 
 #[derive(Copy, Clone, Default)]
@@ -156,9 +158,7 @@ fn create_physical_expr_inner(
     use AExpr::*;
 
     let expr = expr_arena.get(expression).clone();
-
-    println!("debug: create_physical_expr_inner: {}", state.ctx_id);
-    println!("debug: create_physical_expr_inner: {expr:?}");
+    println!("state.policy_check: {}", state.policy_check);
 
     match expr {
         Len => Ok(Arc::new(phys_expr::CountExpr::new())),
@@ -242,6 +242,7 @@ fn create_physical_expr_inner(
                 value,
                 node_to_expr(expression, expr_arena),
                 state.ctx_id,
+                state.policy_check,
             )?))
         },
         BinaryExpr { left, op, right } => {
@@ -254,6 +255,7 @@ fn create_physical_expr_inner(
                 node_to_expr(expression, expr_arena),
                 state.local.has_lit,
                 state.ctx_id,
+                state.policy_check,
             )?))
         },
         Column(column) => Ok(Arc::new(ColumnExpr::new(
@@ -261,6 +263,7 @@ fn create_physical_expr_inner(
             node_to_expr(expression, expr_arena),
             schema.cloned(),
             state.ctx_id,
+            state.policy_check,
         )?)),
         Sort { expr, options } => {
             let phys_expr = create_physical_expr_inner(expr, ctxt, expr_arena, schema, state)?;
@@ -504,6 +507,7 @@ fn create_physical_expr_inner(
                         agg_method,
                         field,
                         state.ctx_id,
+                        state.policy_check,
                     )?))
                 },
             }
@@ -525,6 +529,7 @@ fn create_physical_expr_inner(
                 data_type,
                 node_to_expr(expression, expr_arena),
                 strict,
+                state.policy_check,
             )?))
         },
         Ternary {
@@ -581,6 +586,7 @@ fn create_physical_expr_inner(
                 !state.has_cache,
                 schema.cloned(),
                 state.ctx_id,
+                state.policy_check,
             )?))
         },
         Function {
@@ -614,6 +620,7 @@ fn create_physical_expr_inner(
                 !state.has_cache,
                 schema.cloned(),
                 state.ctx_id,
+                state.policy_check,
             )?))
         },
         Slice {

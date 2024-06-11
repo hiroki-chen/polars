@@ -144,13 +144,15 @@ impl Executor for FilterExec {
             profile_name,
         )?;
 
-        let plan_arg = PlanArgument {
-            argument: Some(Argument::Select(SelectArgument {
-                pred_uuid: self.predicate.get_uuid().to_bytes_le().to_vec(),
-            })),
-            transform_info: state.transform.clone(),
-        };
-        self.execute_epilogue(state, Some(plan_arg))?;
+        if state.policy_check {
+            let plan_arg = PlanArgument {
+                argument: Some(Argument::Select(SelectArgument {
+                    pred_uuid: self.predicate.get_uuid().to_bytes_le().to_vec(),
+                })),
+                transform_info: state.transform.clone(),
+            };
+            self.execute_epilogue(state, Some(plan_arg))?;
+        }
 
         Ok(df)
     }

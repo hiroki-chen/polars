@@ -30,7 +30,6 @@ pub use hash_join::*;
 use hashbrown::hash_map::{Entry, RawEntryMut};
 #[cfg(feature = "merge_sorted")]
 pub use merge_sorted::_merge_sorted_dfs;
-use picachv::join_information::How;
 use picachv::{JoinInformation, RowJoinInformation};
 use polars_core::hashing::_HASHMAP_INIT_SIZE;
 #[allow(unused_imports)]
@@ -126,7 +125,6 @@ pub trait DataFrameJoinOps: IntoDf {
         ti: &mut JoinInformation,
     ) -> PolarsResult<DataFrame> {
         let left_df = self.to_df();
-        println!("_join_impl: {left_df:?} join {other:?} with {selected_left:?} and {selected_right:?} and {args:?} and {_check_rechunk:?} and {_verbose:?}");
         args.validation.is_valid_join(&args.how)?;
 
         #[cfg(feature = "cross_join")]
@@ -470,7 +468,7 @@ trait DataFrameJoinOpsPrivate: IntoDf {
             ComputeError: "Internal error: join tuples are not equal length",
         );
 
-        let row_info = join_tuples_left
+        ti.row_join_info = join_tuples_left
             .into_iter()
             .zip(join_tuples_right.into_iter())
             .map(|(l, r)| RowJoinInformation {
@@ -478,10 +476,6 @@ trait DataFrameJoinOpsPrivate: IntoDf {
                 right_row: *r as _,
             })
             .collect::<Vec<_>>();
-
-        if let Some(How::JoinByName(how)) = &mut ti.how {
-            how.row_join_info = row_info;
-        }
 
         let (df_left, df_right) = POOL.join(
             // SAFETY: join indices are known to be in bounds
