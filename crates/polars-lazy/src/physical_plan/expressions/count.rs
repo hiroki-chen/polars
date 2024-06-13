@@ -25,6 +25,10 @@ impl PhysicalExpr for CountExpr {
         Ok(Series::new("len", [df.height() as IdxSize]))
     }
 
+    fn get_name(&self) -> &str {
+        "Count"
+    }
+
     fn evaluate_on_groups<'a>(
         &self,
         _df: &DataFrame,

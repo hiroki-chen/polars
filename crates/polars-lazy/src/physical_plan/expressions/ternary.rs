@@ -78,6 +78,10 @@ impl PhysicalExpr for TernaryExpr {
         Some(&self.expr)
     }
 
+    fn get_name(&self) -> &str {
+        "Ternary"
+    }
+
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
         let mut state = state.split();
         // Don't cache window functions as they run in parallel.

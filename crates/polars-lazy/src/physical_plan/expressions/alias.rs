@@ -1,3 +1,4 @@
+use picachv::native::rename;
 use polars_core::prelude::*;
 
 use crate::physical_plan::state::ExecutionState;
@@ -28,8 +29,23 @@ impl PhysicalExpr for AliasExpr {
         Some(&self.expr)
     }
 
+    fn get_name(&self) -> &str {
+        "Alias"
+    }
+
+    fn get_uuid(&self) -> uuid::Uuid {
+        self.physical_expr.get_uuid()
+    }
+
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
         let series = self.physical_expr.evaluate(df, state)?;
+        // rename(
+        //     state.ctx_id,
+        //     state.active_df_uuid,
+        //     series.name(),
+        //     &self.name,
+        // )
+        // .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
         Ok(self.finish(series))
     }
 

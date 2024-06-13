@@ -327,6 +327,7 @@ impl<'a> PredicatePushDown<'a> {
                 mut scan_type,
                 file_options: options,
                 output_schema,
+                with_policy,
             } => {
                 for e in acc_predicates.values() {
                     debug_assert_aexpr_allows_predicate_pushdown(e.node(), expr_arena);
@@ -420,6 +421,7 @@ impl<'a> PredicatePushDown<'a> {
                         file_options: options,
                         output_schema,
                         scan_type,
+                        with_policy,
                     }
                 } else {
                     let lp = Scan {
@@ -429,6 +431,7 @@ impl<'a> PredicatePushDown<'a> {
                         file_options: options,
                         output_schema,
                         scan_type,
+                        with_policy,
                     };
                     if let Some(predicate) = predicate {
                         let input = lp_arena.add(lp);

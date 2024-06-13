@@ -171,6 +171,10 @@ impl PhysicalExpr for SortByExpr {
     fn as_expression(&self) -> Option<&Expr> {
         Some(&self.expr)
     }
+    fn get_name(&self) -> &str {
+        "SortBy"
+    }
+
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
         let series_f = || self.input.evaluate(df, state);
         let descending = prepare_descending(&self.sort_options.descending, self.by.len());

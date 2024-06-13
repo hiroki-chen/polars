@@ -18,6 +18,9 @@ impl PhysicalExpr for TakeExpr {
     fn as_expression(&self) -> Option<&Expr> {
         Some(&self.expr)
     }
+    fn get_name(&self) -> &str {
+        "Take"
+    }
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
         let series = self.phys_expr.evaluate(df, state)?;
         self.finish(df, state, series)

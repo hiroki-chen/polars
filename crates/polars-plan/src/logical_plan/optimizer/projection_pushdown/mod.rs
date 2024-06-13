@@ -400,6 +400,7 @@ impl ProjectionPushDown {
                 predicate,
                 mut file_options,
                 mut output_schema,
+                with_policy,
             } => {
                 let mut do_optimization = true;
                 #[allow(irrefutable_let_patterns)]
@@ -445,6 +446,7 @@ impl ProjectionPushDown {
                     scan_type,
                     predicate,
                     file_options,
+                    with_policy,
                 };
                 Ok(lp)
             },

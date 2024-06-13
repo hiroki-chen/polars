@@ -43,12 +43,14 @@ impl IR {
                 scan_type,
                 output_schema: _,
                 file_options: options,
+                with_policy,
             } => DslPlan::Scan {
                 paths,
                 file_info: Some(file_info),
                 predicate: predicate.map(|e| e.to_expr(expr_arena)),
                 scan_type,
                 file_options: options,
+                with_policy,
             },
             #[cfg(feature = "python")]
             IR::PythonScan { options, .. } => DslPlan::PythonScan { options },

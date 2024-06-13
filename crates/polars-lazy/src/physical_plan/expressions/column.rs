@@ -172,6 +172,10 @@ impl PhysicalExpr for ColumnExpr {
         self.expr_id
     }
 
+    fn get_name(&self) -> &str {
+        "Column"
+    }
+
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
         let out = match &self.schema {
             None => self.process_by_linear_search(df, state, false),

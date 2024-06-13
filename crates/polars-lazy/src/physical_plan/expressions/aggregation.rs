@@ -62,6 +62,7 @@ fn arg_to_expr(
             input_uuid,
             method: match agg_type {
                 GroupByMethod::Sum => picachv::GroupByMethod::Sum,
+                GroupByMethod::Mean => picachv::GroupByMethod::Mean,
                 _ => polars_bail!(ComputeError: "Aggregation method not supported: {:?}", agg_type),
             } as _,
         })),
@@ -73,6 +74,10 @@ fn arg_to_expr(
 impl PhysicalExpr for AggregationExpr {
     fn as_expression(&self) -> Option<&Expr> {
         None
+    }
+
+    fn get_name(&self) -> &str {
+        "Aggregation"
     }
 
     fn get_uuid(&self) -> Uuid {
@@ -618,6 +623,10 @@ impl AggQuantileExpr {
 impl PhysicalExpr for AggQuantileExpr {
     fn as_expression(&self) -> Option<&Expr> {
         None
+    }
+
+    fn get_name(&self) -> &str {
+        "AggQuantile"
     }
 
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {

@@ -366,6 +366,9 @@ impl WindowExpr {
 }
 
 impl PhysicalExpr for WindowExpr {
+    fn get_name(&self) -> &str {
+        "Window"
+    }
     // Note: this was first implemented with expression evaluation but this performed really bad.
     // Therefore we choose the group_by -> apply -> self join approach
 

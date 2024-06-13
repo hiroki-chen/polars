@@ -18,12 +18,15 @@ pub trait Executor: Send {
         cache: &mut ExecutionState,
         plan_arg: Option<PlanArgument>,
     ) -> PolarsResult<()> {
-        let active_df_uuid = execute_epilogue(
+        println!(
+            "executing epilogue: {} {} {:?}",
             cache.ctx_id,
             cache.active_df_uuid,
             plan_arg,
-        )
-        .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+        );
+
+        let active_df_uuid = execute_epilogue(cache.ctx_id, cache.active_df_uuid, plan_arg)
+            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
         println!("setting to {active_df_uuid}");
         cache.set_active_df_uuid(active_df_uuid);
         cache.transform.take();

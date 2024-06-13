@@ -44,6 +44,10 @@ impl PhysicalExpr for LiteralExpr {
         self.2
     }
 
+    fn get_name(&self) -> &str {
+        "Literal"
+    }
+
     fn evaluate(&self, _df: &DataFrame, _state: &ExecutionState) -> PolarsResult<Series> {
         use LiteralValue::*;
         let s = match &self.0 {

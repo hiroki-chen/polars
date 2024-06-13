@@ -80,12 +80,14 @@ impl Hash for HashableEqLP<'_> {
                 output_schema: _,
                 scan_type,
                 file_options,
+                with_policy,
             } => {
                 // We don't have to traverse the schema, hive partitions etc. as they are derivative from the paths.
                 scan_type.hash(state);
                 paths.hash(state);
                 hash_option_expr(predicate, self.expr_arena, state);
                 file_options.hash(state);
+                with_policy.hash(state);
             },
             IR::DataFrameScan {
                 df,
@@ -258,6 +260,7 @@ impl HashableEqLP<'_> {
                     output_schema: _,
                     scan_type: stl,
                     file_options: ol,
+                    with_policy: p1,
                 },
                 IR::Scan {
                     paths: pr,
@@ -266,12 +269,14 @@ impl HashableEqLP<'_> {
                     output_schema: _,
                     scan_type: str,
                     file_options: or,
+                    with_policy: p2,
                 },
             ) => {
                 pl == pr
                     && stl == str
                     && ol == or
                     && opt_expr_ir_eq(pred_l, pred_r, self.expr_arena)
+                    && p1 == p2
             },
             (
                 IR::DataFrameScan {

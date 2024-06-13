@@ -80,6 +80,7 @@ where
             predicate,
             output_schema,
             scan_type,
+            with_policy,
         } => {
             // Add predicate to operators.
             // Except for parquet, as that format can use statistics to prune file/row-groups.

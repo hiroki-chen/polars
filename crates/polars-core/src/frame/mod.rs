@@ -1835,7 +1835,7 @@ impl DataFrame {
         #[cfg(feature = "dtype-struct")]
         let has_struct = by_column
             .iter()
-            .any(|s| matches!(s.dtype(), DataType::Struct(_)));
+            .any(|s: &Series| matches!(s.dtype(), DataType::Struct(_)));
 
         #[cfg(not(feature = "dtype-struct"))]
         #[allow(non_upper_case_globals)]

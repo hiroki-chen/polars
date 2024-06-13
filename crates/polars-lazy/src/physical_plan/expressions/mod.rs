@@ -70,14 +70,34 @@ pub(crate) fn op_to_binop(op: Operator) -> PolarsResult<picachv::BinaryOperator>
                 picachv::ComparisonBinaryOperator::Gt.into(),
             )),
         }),
+        Operator::Multiply => Ok(picachv::BinaryOperator {
+            operator: Some(picachv::binary_operator::Operator::ArithmeticOperator(
+                picachv::ArithmeticBinaryOperator::Mul.into(),
+            )),
+        }),
         Operator::Plus => Ok(picachv::BinaryOperator {
             operator: Some(picachv::binary_operator::Operator::ArithmeticOperator(
                 picachv::ArithmeticBinaryOperator::Add.into(),
             )),
         }),
+        Operator::Minus => Ok(picachv::BinaryOperator {
+            operator: Some(picachv::binary_operator::Operator::ArithmeticOperator(
+                picachv::ArithmeticBinaryOperator::Sub.into(),
+            )),
+        }),
+        Operator::Divide => Ok(picachv::BinaryOperator {
+            operator: Some(picachv::binary_operator::Operator::ArithmeticOperator(
+                picachv::ArithmeticBinaryOperator::Div.into(),
+            )),
+        }),
         Operator::And => Ok(picachv::BinaryOperator {
             operator: Some(picachv::binary_operator::Operator::LogicalOperator(
                 picachv::LogicalBinaryOperator::And.into(),
+            )),
+        }),
+        Operator::Or => Ok(picachv::BinaryOperator {
+            operator: Some(picachv::binary_operator::Operator::LogicalOperator(
+                picachv::LogicalBinaryOperator::Or.into(),
             )),
         }),
         _ => Err(polars_err!(ComputeError: "{op:?} operation not supported")),
@@ -610,6 +630,8 @@ pub trait PhysicalExpr: Send + Sync {
     fn as_expression(&self) -> Option<&Expr> {
         None
     }
+
+    fn get_name(&self) -> &str;
 
     fn get_uuid(&self) -> Uuid {
         unimplemented!("should be implemented by the expr")

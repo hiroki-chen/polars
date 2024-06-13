@@ -214,6 +214,7 @@ pub fn create_physical_plan(
             )))
         },
         #[allow(unused_variables)]
+        // TODO: Add the policy path to the physical plan!!!!!!!
         Scan {
             paths,
             file_info,
@@ -221,6 +222,7 @@ pub fn create_physical_plan(
             scan_type,
             predicate,
             mut file_options,
+            with_policy,
         } => {
             file_options.n_rows = _set_n_rows_for_scan(file_options.n_rows);
             let mut state = ExpressionConversionState::default();

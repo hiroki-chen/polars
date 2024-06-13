@@ -185,6 +185,10 @@ impl PhysicalExpr for BinaryExpr {
         self.expr_id
     }
 
+    fn get_name(&self) -> &str {
+        "Binary"
+    }
+
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
         // Window functions may set a global state that determine their output
         // state, so we don't let them run in parallel as they race

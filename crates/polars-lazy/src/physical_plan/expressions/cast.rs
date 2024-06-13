@@ -54,6 +54,10 @@ impl PhysicalExpr for CastExpr {
         self.expr_uuid
     }
 
+    fn get_name(&self) -> &str {
+        "Cast"
+    }
+
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
         let series = self.input.evaluate(df, state)?;
         self.finish(&series)

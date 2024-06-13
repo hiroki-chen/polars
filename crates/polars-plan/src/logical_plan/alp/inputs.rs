@@ -103,6 +103,7 @@ impl IR {
                 predicate,
                 file_options: options,
                 scan_type,
+                with_policy,
             } => {
                 let mut new_predicate = None;
                 if predicate.is_some() {
@@ -115,6 +116,7 @@ impl IR {
                     file_options: options.clone(),
                     predicate: new_predicate,
                     scan_type: scan_type.clone(),
+                    with_policy: with_policy.clone(),
                 }
             },
             DataFrameScan {

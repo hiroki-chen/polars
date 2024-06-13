@@ -172,7 +172,8 @@ impl SlicePushDown {
                 output_schema,
                 file_options: mut options,
                 predicate,
-                scan_type: FileScan::Csv {options: mut csv_options}
+                scan_type: FileScan::Csv {options: mut csv_options},
+                with_policy
             }, Some(state)) if predicate.is_none() && state.offset >= 0 =>  {
                 options.n_rows = Some(state.len as usize);
                 csv_options.skip_rows += state.offset as usize;
@@ -184,6 +185,7 @@ impl SlicePushDown {
                     scan_type: FileScan::Csv {options: csv_options},
                     file_options: options,
                     predicate,
+                    with_policy
                 };
                 Ok(lp)
             },
@@ -194,7 +196,8 @@ impl SlicePushDown {
                 output_schema,
                 file_options: mut options,
                 predicate,
-                scan_type
+                scan_type,
+                with_policy
             }, Some(state)) if state.offset == 0 && predicate.is_none() => {
                 options.n_rows = Some(state.len as usize);
                 let lp = Scan {
@@ -203,7 +206,8 @@ impl SlicePushDown {
                     output_schema,
                     predicate,
                     file_options: options,
-                    scan_type
+                    scan_type,
+                    with_policy,
                 };
 
                 Ok(lp)

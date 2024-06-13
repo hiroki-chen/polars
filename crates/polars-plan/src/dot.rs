@@ -333,6 +333,7 @@ impl DslPlan {
                 predicate,
                 scan_type,
                 file_options: options,
+                with_policy,
             } => {
                 let name: &str = scan_type.into();
 

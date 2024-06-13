@@ -57,6 +57,7 @@ pub fn to_alp(
             predicate,
             mut scan_type,
             file_options,
+            with_policy,
         } => {
             let mut file_info = if let Some(file_info) = file_info {
                 file_info
@@ -110,6 +111,7 @@ pub fn to_alp(
                 predicate: predicate.map(|expr| to_expr_ir(expr, expr_arena)),
                 scan_type,
                 file_options,
+                with_policy,
             }
         },
         #[cfg(feature = "python")]

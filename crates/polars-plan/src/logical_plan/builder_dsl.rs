@@ -76,6 +76,7 @@ impl DslBuilder {
                     skip_rows,
                 }),
             },
+            with_policy: None,
         }
         .into())
     }
@@ -93,8 +94,10 @@ impl DslBuilder {
         cloud_options: Option<CloudOptions>,
         use_statistics: bool,
         hive_options: HiveOptions,
+        with_policy: Option<std::path::PathBuf>,
     ) -> PolarsResult<Self> {
         let paths = paths.into();
+        let with_policy = with_policy.map(|e| e.into());
 
         let options = FileScanOptions {
             with_columns: None,
@@ -119,6 +122,7 @@ impl DslBuilder {
                 cloud_options,
                 metadata: None,
             },
+            with_policy,
         }
         .into())
     }
@@ -157,6 +161,7 @@ impl DslBuilder {
                 cloud_options,
                 metadata: None,
             },
+            with_policy: None,
         }
         .into())
     }
@@ -234,6 +239,7 @@ impl DslBuilder {
                     decimal_float,
                 },
             },
+            with_policy: None, // todo: make it path.
         }
         .into())
     }

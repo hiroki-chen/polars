@@ -396,7 +396,10 @@ impl Executor for PartitionGroupByExec {
                     aggs_uuid: self
                         .phys_aggs
                         .iter()
-                        .map(|e| e.get_uuid().to_bytes_le().to_vec())
+                        .map(|e| {
+                            println!("this is {}", e.get_name());
+                            e.get_uuid().to_bytes_le().to_vec()
+                        })
                         .collect(),
                     maintain_order: self.maintain_order,
                     group_by_proxy: gb.map(|gb| GroupByProxy {

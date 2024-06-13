@@ -1,3 +1,7 @@
+use picachv::plan_argument::Argument;
+use picachv::transform_info::Information;
+use picachv::{PlanArgument, ReorderInformation, TransformArgument, TransformInfo};
+
 use super::*;
 
 pub(crate) struct SortExec {
@@ -10,7 +14,7 @@ pub(crate) struct SortExec {
 impl SortExec {
     fn execute_impl(
         &mut self,
-        state: &ExecutionState,
+        state: &mut ExecutionState,
         mut df: DataFrame,
     ) -> PolarsResult<DataFrame> {
         state.should_stop()?;
@@ -33,7 +37,22 @@ impl SortExec {
             })
             .collect::<PolarsResult<Vec<_>>>()?;
 
-        df.sort_impl(by_columns, self.sort_options.clone(), self.slice)
+        let df = df.sort_impl(by_columns, self.sort_options.clone(), self.slice)?;
+        println!("slice: {:?}", self.slice);
+
+        if state.policy_check {
+            let plan_arg = PlanArgument {
+                // Sort does nothing but sort the data.
+                argument: Some(Argument::Transform(TransformArgument{})),
+                transform_info: Some(TransformInfo {
+                    information: Some(Information::Reorder(ReorderInformation { perm: vec![] })),
+                }),
+            };
+
+            self.execute_epilogue(state, Some(plan_arg))?;
+        }
+
+        Ok(df)
     }
 }
 

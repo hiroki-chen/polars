@@ -38,6 +38,8 @@ pub enum IR {
         scan_type: FileScan,
         /// generic options that can be used for all file types.
         file_options: FileScanOptions,
+        /// The policy path.
+        with_policy: Option<Arc<PathBuf>>,
     },
     DataFrameScan {
         df: Arc<DataFrame>,

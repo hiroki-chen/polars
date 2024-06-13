@@ -326,6 +326,10 @@ impl PhysicalExpr for ApplyExpr {
         self.expr_id
     }
 
+    fn get_name(&self) -> &str {
+        "Apply"
+    }
+
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
         let f = |e: &Arc<dyn PhysicalExpr>| e.evaluate(df, state);
         let mut inputs = if self.allow_threading && self.inputs.len() > 1 {
