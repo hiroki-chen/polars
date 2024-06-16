@@ -151,7 +151,7 @@ impl Executor for ProjectionExec {
             // self.execute_prologue(state)?;
             let plan_arg = PlanArgument {
                 argument: Some(Argument::Projection(ProjectionArgument {
-                    expression: self
+                    expressions: self
                         .expr
                         .iter()
                         .map(|e| e.get_uuid().to_bytes_le().to_vec())

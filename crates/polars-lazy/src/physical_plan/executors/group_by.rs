@@ -181,6 +181,8 @@ impl Executor for GroupByExec {
             self.execute_impl(state, df)
         }?;
 
+        println!("df => {df}");
+
         if state.policy_check {
             let gb = Some(state.last_used_groupby.clone());
             let plan_arg = PlanArgument {
@@ -218,8 +220,6 @@ impl Executor for GroupByExec {
                 })),
                 transform_info: state.transform.clone(),
             };
-
-            println!("sending plan_arg for groupby: {plan_arg:?}");
 
             self.execute_epilogue(state, Some(plan_arg))?;
         }

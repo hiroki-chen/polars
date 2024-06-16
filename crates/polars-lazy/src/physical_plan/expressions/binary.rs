@@ -1,5 +1,5 @@
 use picachv::expr_argument::Argument;
-use picachv::native::build_expr;
+use picachv::native::{build_expr, reify_expression};
 use picachv::ExprArgument;
 use polars_core::prelude::*;
 use polars_core::POOL;
@@ -114,6 +114,7 @@ pub fn apply_operator(left: &Series, right: &Series, op: Operator) -> PolarsResu
 }
 
 impl BinaryExpr {
+    // todo
     fn apply_elementwise<'a>(
         &self,
         mut ac_l: AggregationContext<'a>,
@@ -154,6 +155,7 @@ impl BinaryExpr {
         Ok(ac_l)
     }
 
+    // todo
     fn apply_group_aware<'a>(
         &self,
         mut ac_l: AggregationContext<'a>,
@@ -228,6 +230,17 @@ impl PhysicalExpr for BinaryExpr {
             ComputeError: "cannot evaluate two Series of different lengths ({} and {})",
             lhs.len(), rhs.len(),
         );
+
+        if state.policy_check {
+            println!("lhs {} rhs {}", lhs.len(), rhs.len());
+            println!("df:\n{df}");
+            // do the expression reification.
+            let values = inputs_as_arrow(&[lhs.clone(), rhs.clone()])?;
+
+            reify_expression(state.ctx_id, self.expr_id, &values)
+                .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+        }
+
         apply_operator_owned(lhs, rhs, self.op)
     }
 
@@ -246,6 +259,13 @@ impl PhysicalExpr for BinaryExpr {
         });
         let mut ac_l = result_a?;
         let ac_r = result_b?;
+
+        if state.policy_check {
+            let bytes = inputs_as_arrow(&[ac_l.series().clone(), ac_r.series().clone()])?;
+            reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
+                PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
+            })?;
+        }
 
         match (ac_l.agg_state(), ac_r.agg_state()) {
             (AggState::Literal(s), AggState::NotAggregated(_))

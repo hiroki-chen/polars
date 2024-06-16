@@ -17,6 +17,10 @@ pub(crate) struct RollingExpr {
 }
 
 impl PhysicalExpr for RollingExpr {
+    fn get_name(&self) -> &str {
+        "Rolling"
+    }
+
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
         let groups_key = format!("{:?}", &self.options);
 

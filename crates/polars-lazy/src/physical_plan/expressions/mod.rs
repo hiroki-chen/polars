@@ -100,6 +100,16 @@ pub(crate) fn op_to_binop(op: Operator) -> PolarsResult<picachv::BinaryOperator>
                 picachv::LogicalBinaryOperator::Or.into(),
             )),
         }),
+        Operator::LtEq => Ok(picachv::BinaryOperator {
+            operator: Some(picachv::binary_operator::Operator::ComparisonOperator(
+                picachv::ComparisonBinaryOperator::Le.into(),
+            )),
+        }),
+        Operator::GtEq => Ok(picachv::BinaryOperator {
+            operator: Some(picachv::binary_operator::Operator::ComparisonOperator(
+                picachv::ComparisonBinaryOperator::Ge.into(),
+            )),
+        }),
         _ => Err(polars_err!(ComputeError: "{op:?} operation not supported")),
     }
 }

@@ -1,3 +1,6 @@
+use picachv::plan_argument::Argument;
+use picachv::{HstackArgument, PlanArgument};
+#[allow(unused_imports)]
 use polars_core::utils::accumulate_dataframes_vertical_unchecked;
 
 use super::*;
@@ -14,6 +17,26 @@ pub struct StackExec {
 }
 
 impl StackExec {
+    pub fn new(
+        input: Box<dyn Executor>,
+        has_windows: bool,
+        cse_exprs: Vec<Arc<dyn PhysicalExpr>>,
+        exprs: Vec<Arc<dyn PhysicalExpr>>,
+        input_schema: SchemaRef,
+        options: ProjectionOptions,
+        streamable: bool,
+    ) -> Self {
+        Self {
+            input,
+            has_windows,
+            cse_exprs,
+            exprs,
+            input_schema,
+            options,
+            streamable,
+        }
+    }
+
     fn execute_impl(
         &mut self,
         state: &ExecutionState,
@@ -23,27 +46,30 @@ impl StackExec {
 
         // Vertical and horizontal parallelism.
         let df =
-            if self.streamable && df.n_chunks() > 1 && df.height() > 0 && self.options.run_parallel
-            {
-                let chunks = df.split_chunks().collect::<Vec<_>>();
-                let iter = chunks.into_par_iter().map(|mut df| {
-                    let res = evaluate_physical_expressions(
-                        &mut df,
-                        &self.cse_exprs,
-                        &self.exprs,
-                        state,
-                        self.has_windows,
-                        self.options.run_parallel,
-                    )?;
-                    df._add_columns(res, schema)?;
-                    Ok(df)
-                });
+        // we disable parallelism for now.
 
-                let df = POOL.install(|| iter.collect::<PolarsResult<Vec<_>>>())?;
-                accumulate_dataframes_vertical_unchecked(df)
-            }
-            // Only horizontal parallelism
-            else {
+            // if self.streamable && df.n_chunks() > 1 && df.height() > 0 && self.options.run_parallel
+            // {
+            //     let chunks = df.split_chunks().collect::<Vec<_>>();
+            //     let iter = chunks.into_par_iter().map(|mut df| {
+            //         let res = evaluate_physical_expressions(
+            //             &mut df,
+            //             &self.cse_exprs,
+            //             &self.exprs,
+            //             state,
+            //             self.has_windows,
+            //             self.options.run_parallel,
+            //         )?;
+            //         df._add_columns(res, schema)?;
+            //         Ok(df)
+            //     });
+
+            //     let df = POOL.install(|| iter.collect::<PolarsResult<Vec<_>>>())?;
+            //     accumulate_dataframes_vertical_unchecked(df)
+            // }
+            // // Only horizontal parallelism
+            // else 
+            {
                 let res = evaluate_physical_expressions(
                     &mut df,
                     &self.cse_exprs,
@@ -94,12 +120,36 @@ impl Executor for StackExec {
         } else {
             Cow::Borrowed("")
         };
+        println!("stack: {}", df);
 
-        if state.has_node_timer() {
+        let df = if state.has_node_timer() {
             let new_state = state.clone();
             new_state.record(|| self.execute_impl(state, df), profile_name)
         } else {
             self.execute_impl(state, df)
+        }?;
+        println!("after execute: {}", df);
+
+        if state.policy_check {
+            let arg = PlanArgument {
+                argument: Some(Argument::Hstack(HstackArgument {
+                    cse: self
+                        .cse_exprs
+                        .iter()
+                        .map(|e| e.get_uuid().to_bytes_le().to_vec())
+                        .collect(),
+                    expressions: self
+                        .exprs
+                        .iter()
+                        .map(|e| e.get_uuid().to_bytes_le().to_vec())
+                        .collect(),
+                })),
+                transform_info: None,
+            };
+
+            self.execute_epilogue(state, Some(arg))?;
         }
+
+        Ok(df)
     }
 }

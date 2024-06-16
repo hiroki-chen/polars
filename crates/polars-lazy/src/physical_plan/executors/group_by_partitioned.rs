@@ -283,6 +283,8 @@ impl PartitionGroupByExec {
             // Run the partitioned aggregations
             let n_threads = POOL.current_num_threads();
 
+            println!("execute_impl:  partitioned");
+
             run_partitions(
                 &mut original_df,
                 self,
@@ -383,6 +385,8 @@ impl Executor for PartitionGroupByExec {
             self.execute_impl(state, original_df)
         }?;
 
+        println!("df => {df}");
+
         if state.policy_check {
             // bug: the content has been tampered.
             let gb = Some(state.last_used_groupby.clone());
@@ -424,8 +428,6 @@ impl Executor for PartitionGroupByExec {
                 })),
                 transform_info: state.transform.clone(),
             };
-
-            println!("sending plan_arg for groupby: {plan_arg:?}");
 
             self.execute_epilogue(state, Some(plan_arg))?;
         }

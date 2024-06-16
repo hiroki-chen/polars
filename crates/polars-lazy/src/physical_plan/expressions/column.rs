@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use picachv::column_specifier::Column;
-use picachv::native::build_expr;
+use picachv::native::{build_expr, reify_expression};
 use picachv::{ColumnSpecifier, ExprArgument};
 use polars_core::prelude::*;
 use polars_plan::constants::CSE_REPLACED;
@@ -177,6 +177,7 @@ impl PhysicalExpr for ColumnExpr {
     }
 
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
+        // Try to get its name!
         let out = match &self.schema {
             None => self.process_by_linear_search(df, state, false),
             Some(schema) => {
@@ -185,7 +186,16 @@ impl PhysicalExpr for ColumnExpr {
                         // check if the schema was correct
                         // if not do O(n) search
                         match df.get_columns().get(idx) {
-                            Some(out) => self.process_by_idx(out, state, schema, df, true),
+                            Some(out) => {
+                                if state.policy_check {
+                                    let idx = idx.to_le_bytes();
+                                    reify_expression(state.ctx_id, self.expr_id, &idx).map_err(
+                                        |e| PolarsError::ComputeError(e.to_string().into()),
+                                    )?;
+                                }
+
+                                self.process_by_idx(out, state, schema, df, true)
+                            },
                             None => {
                                 // partitioned group_by special case
                                 if let Some(schema) = state.get_schema() {

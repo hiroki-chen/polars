@@ -111,6 +111,7 @@ impl ExpressionConversionState {
         }
     }
     fn reset(&mut self) {
+
         self.local = Default::default()
     }
 
@@ -159,6 +160,9 @@ fn create_physical_expr_inner(
 
     let expr = expr_arena.get(expression).clone();
     println!("state.policy_check: {}", state.policy_check);
+    if !state.policy_check {
+        panic!("aaaa");
+    }
 
     match expr {
         Len => Ok(Arc::new(phys_expr::CountExpr::new())),

@@ -226,6 +226,9 @@ pub fn create_physical_plan(
         } => {
             file_options.n_rows = _set_n_rows_for_scan(file_options.n_rows);
             let mut state = ExpressionConversionState::default();
+            state.ctx_id = ctx_id;
+            state.policy_check = policy_check;
+
             let predicate = predicate
                 .map(|pred| {
                     create_physical_expr(
@@ -280,6 +283,7 @@ pub fn create_physical_plan(
                     cloud_options,
                     file_options,
                     metadata,
+                    with_policy,
                 ))),
                 FileScan::Anonymous { function, .. } => {
                     Ok(Box::new(executors::AnonymousScanExec {
@@ -375,12 +379,16 @@ pub fn create_physical_plan(
             sort_options,
         } => {
             let input_schema = lp_arena.get(input).schema(lp_arena);
+            let mut state = ExpressionConversionState::default();
+            state.ctx_id = ctx_id;
+            state.policy_check = policy_check;
+
             let by_column = create_physical_expressions_from_irs(
                 &by_column,
                 Context::Default,
                 expr_arena,
                 Some(input_schema.as_ref()),
-                &mut Default::default(),
+                &mut state,
             )?;
             let input = create_physical_plan(input, lp_arena, expr_arena, ctx_id, policy_check)?;
             Ok(Box::new(executors::SortExec {
@@ -550,7 +558,7 @@ pub fn create_physical_plan(
             rhs_state.set_ctx_id(ctx_id);
             lhs_state.policy_check = policy_check;
             rhs_state.policy_check = policy_check;
-            
+
             let left_on = create_physical_expressions_from_irs(
                 &left_on,
                 Context::Default,
@@ -592,6 +600,8 @@ pub fn create_physical_plan(
 
             let mut state =
                 ExpressionConversionState::new(POOL.current_num_threads() > exprs.len());
+            state.ctx_id = ctx_id;
+            state.policy_check = policy_check;
 
             let cse_exprs = create_physical_expressions_from_irs(
                 exprs.cse_exprs(),
@@ -608,15 +618,15 @@ pub fn create_physical_plan(
                 Some(&input_schema),
                 &mut state,
             )?;
-            Ok(Box::new(executors::StackExec {
+            Ok(Box::new(executors::StackExec::new(
                 input,
-                has_windows: state.has_windows,
+                state.has_windows,
                 cse_exprs,
-                exprs: phys_exprs,
+                phys_exprs,
                 input_schema,
                 options,
                 streamable,
-            }))
+            )))
         },
         MapFunction {
             input, function, ..

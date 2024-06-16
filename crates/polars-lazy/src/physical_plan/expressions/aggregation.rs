@@ -130,6 +130,13 @@ impl PhysicalExpr for AggregationExpr {
                 GroupByMethod::Mean => {
                     let (s, groups) = ac.get_final_aggregation();
                     let agg_s = s.agg_mean(&groups);
+
+                    if state.policy_check {
+                        let bytes = inputs_as_arrow(&[agg_s.clone()])?;
+                        reify_expression(state.ctx_id, self.expr_uuid, &bytes)
+                            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+                    }
+
                     AggregatedScalar(rename_series(agg_s, &keep_name))
                 },
                 GroupByMethod::Sum => {

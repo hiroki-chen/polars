@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use picachv::native::register_policy_dataframe_json;
 use polars_core::config;
 #[cfg(feature = "cloud")]
 use polars_core::config::{get_file_prefetch_size, verbose};
@@ -19,6 +20,7 @@ pub struct ParquetExec {
     file_options: FileScanOptions,
     #[allow(dead_code)]
     metadata: Option<Arc<FileMetaData>>,
+    with_policy: Option<Arc<PathBuf>>,
 }
 
 impl ParquetExec {
@@ -30,6 +32,7 @@ impl ParquetExec {
         cloud_options: Option<CloudOptions>,
         file_options: FileScanOptions,
         metadata: Option<Arc<FileMetaData>>,
+        with_policy: Option<Arc<PathBuf>>,
     ) -> Self {
         ParquetExec {
             paths,
@@ -39,6 +42,7 @@ impl ParquetExec {
             cloud_options,
             file_options,
             metadata,
+            with_policy,
         }
     }
 
@@ -379,6 +383,9 @@ impl ParquetExec {
 
 impl Executor for ParquetExec {
     fn execute(&mut self, state: &mut ExecutionState) -> PolarsResult<DataFrame> {
+        polars_ensure!(!(state.policy_check && self.with_policy.is_none()), 
+            InvalidOperation: "Policy check requested but no policy was provided");
+
         let profile_name = if state.has_node_timer() {
             let mut ids = vec![self.paths[0].to_string_lossy().into()];
             if self.predicate.is_some() {
@@ -390,6 +397,32 @@ impl Executor for ParquetExec {
             Cow::Borrowed("")
         };
 
-        state.record(|| self.read(), profile_name)
+        let df = state.record(|| self.read(), profile_name)?;
+
+        if state.policy_check {
+            state.active_df_uuid = 
+                register_policy_dataframe_json(state.ctx_id, self.with_policy.as_ref().unwrap().as_path().to_str().unwrap()).map_err(|e| PolarsError::InvalidOperation(e.to_string().into()))?;
+
+            // Then construct the plan argument and execute the epilogue.
+            let plan_arg = PlanArgument {
+                argument: Some(plan_argument::Argument::GetData(GetDataArgument {
+                    data_source: Some(DataSource::InMemory(GetDataInMemory {
+                        df_uuid: state.active_df_uuid.clone().to_bytes_le().to_vec(),
+                        pred: None,
+                        projection_list: self.file_options.with_columns.as_ref().map(|pl| {
+                            ProjectionList::ByName(ByName {
+                                project_list: pl.iter().map(|e| (*e).clone()).collect(),
+                            })
+                        }),
+                    })),
+                })),
+                transform_info: state.transform.clone(),
+            };
+
+            self.execute_epilogue(state, Some(plan_arg))?;
+        }
+
+        Ok(df)
     }
 }
+

@@ -39,6 +39,7 @@ impl PhysicalExpr for AliasExpr {
 
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
         let series = self.physical_expr.evaluate(df, state)?;
+
         // rename(
         //     state.ctx_id,
         //     state.active_df_uuid,
