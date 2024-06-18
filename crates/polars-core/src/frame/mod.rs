@@ -1786,7 +1786,7 @@ impl DataFrame {
         sort_options: SortMultipleOptions,
     ) -> PolarsResult<&mut Self> {
         let by_column = self.select_series(by)?;
-        self.columns = self.sort_impl(by_column, sort_options, None)?.columns;
+        self.columns = self.sort_impl(by_column, sort_options, None)?.0.columns;
         Ok(self)
     }
 
@@ -1797,7 +1797,7 @@ impl DataFrame {
         by_column: Vec<Series>,
         mut sort_options: SortMultipleOptions,
         slice: Option<(i64, usize)>,
-    ) -> PolarsResult<Self> {
+    ) -> PolarsResult<(Self, UInt32Chunked)> {
         // note that the by_column argument also contains evaluated expression from polars-lazy
         // that may not even be present in this dataframe.
 
@@ -1825,12 +1825,13 @@ impl DataFrame {
             let mut out = self.clone();
             set_sorted(&mut out);
 
-            return Ok(out);
+            return Ok((out, Default::default()));
         }
 
-        if let Some((0, k)) = slice {
-            return self.bottom_k_impl(k, by_column, sort_options);
-        }
+        // todo!
+        // if let Some((0, k)) = slice {
+        //     // return self.bottom_k_impl(k, by_column, sort_options);
+        // }
 
         #[cfg(feature = "dtype-struct")]
         let has_struct = by_column
@@ -1853,17 +1854,18 @@ impl DataFrame {
                     multithreaded: sort_options.multithreaded,
                     maintain_order: sort_options.maintain_order,
                 };
+                // todo.
                 // fast path for a frame with a single series
                 // no need to compute the sort indices and then take by these indices
                 // simply sort and return as frame
-                if df.width() == 1 && df.check_name_to_idx(s.name()).is_ok() {
-                    let mut out = s.sort_with(options)?;
-                    if let Some((offset, len)) = slice {
-                        out = out.slice(offset, len);
-                    }
+                // if df.width() == 1 && df.check_name_to_idx(s.name()).is_ok() {
+                //     let mut out = s.sort_with(options)?;
+                //     if let Some((offset, len)) = slice {
+                //         out = out.slice(offset, len);
+                //     }
 
-                    return Ok(out.into_frame());
-                }
+                //     return Ok(out.into_frame());
+                // }
                 s.arg_sort(options)
             },
             _ => {
@@ -1892,7 +1894,7 @@ impl DataFrame {
         // the created indices are in bounds
         let mut df = unsafe { df.take_unchecked_impl(&take, sort_options.multithreaded) };
         set_sorted(&mut df);
-        Ok(df)
+        Ok((df, take))
     }
 
     /// Return a sorted clone of this [`DataFrame`].

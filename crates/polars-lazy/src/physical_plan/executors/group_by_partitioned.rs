@@ -283,8 +283,6 @@ impl PartitionGroupByExec {
             // Run the partitioned aggregations
             let n_threads = POOL.current_num_threads();
 
-            println!("execute_impl:  partitioned");
-
             run_partitions(
                 &mut original_df,
                 self,

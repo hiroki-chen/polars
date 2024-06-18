@@ -63,6 +63,8 @@ fn arg_to_expr(
             method: match agg_type {
                 GroupByMethod::Sum => picachv::GroupByMethod::Sum,
                 GroupByMethod::Mean => picachv::GroupByMethod::Mean,
+                GroupByMethod::Min => picachv::GroupByMethod::Min,
+                GroupByMethod::Max => picachv::GroupByMethod::Max,
                 _ => polars_bail!(ComputeError: "Aggregation method not supported: {:?}", agg_type),
             } as _,
         })),

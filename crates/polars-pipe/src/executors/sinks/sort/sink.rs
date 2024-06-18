@@ -244,9 +244,9 @@ pub(super) fn sort_accumulated(
     // This is needed because we can have empty blocks and we require chunks to have single chunks.
     df.as_single_chunk_par();
     let sort_column = df.get_columns()[sort_idx].clone();
-    df.sort_impl(
+    Ok(df.sort_impl(
         vec![sort_column],
         SortMultipleOptions::from(&sort_options),
         slice,
-    )
+    )?.0)
 }

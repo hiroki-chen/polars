@@ -124,6 +124,8 @@ pub trait DataFrameJoinOps: IntoDf {
         _verbose: bool,
         ti: &mut JoinInformation,
     ) -> PolarsResult<DataFrame> {
+        println!("args: {args:?}");
+
         let left_df = self.to_df();
         args.validation.is_valid_join(&args.how)?;
 
@@ -448,7 +450,6 @@ trait DataFrameJoinOpsPrivate: IntoDf {
         _check_categorical_src(s_left.dtype(), s_right.dtype())?;
         let ((join_tuples_left, join_tuples_right), sorted) =
             _sort_or_hash_inner(s_left, s_right, verbose, args.validation, args.join_nulls)?;
-
         // These are the indices of the join operation for the left and right DataFrame.
         let mut join_tuples_left = &*join_tuples_left;
         let mut join_tuples_right = &*join_tuples_right;
@@ -457,11 +458,6 @@ trait DataFrameJoinOpsPrivate: IntoDf {
             join_tuples_left = slice_slice(join_tuples_left, offset, len);
             join_tuples_right = slice_slice(join_tuples_right, offset, len);
         }
-
-        // This is actucally the indices from the left and right DataFrame.
-        println!(
-            "join_tuples_left = {join_tuples_left:?}, join_tuples_right = {join_tuples_right:?}"
-        );
 
         polars_ensure!(
             join_tuples_left.len() == join_tuples_right.len(),
@@ -489,6 +485,34 @@ trait DataFrameJoinOpsPrivate: IntoDf {
                 ._take_unchecked_slice(join_tuples_right, true)
             },
         );
+
+        // we keep all left columns.
+        ti.left_columns = df_left
+            .get_column_names()
+            .iter()
+            .enumerate()
+            .map(|(i, _)| i as _)
+            .collect();
+        ti.right_columns = other
+            .get_column_names()
+            .iter()
+            .enumerate()
+            .map(|(i, _)| i as _)
+            .collect();
+        // remove right columns.
+        match drop_names {
+            Some(drop_names) => {
+                let drop_indices = drop_names
+                    .iter()
+                    .map(|name| other.get_column_index(name).unwrap() as u64)
+                    .collect::<Vec<_>>();
+                ti.right_columns.retain(|i| !drop_indices.contains(i));
+            },
+            None => {
+                let drop_index = other.get_column_index(s_right.name()).unwrap() as u64;
+                ti.right_columns.retain(|i| *i != drop_index);
+            },
+        }
 
         _finish_join(df_left, df_right, args.suffix.as_deref(), ti)
     }

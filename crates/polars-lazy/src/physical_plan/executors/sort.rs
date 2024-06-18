@@ -37,15 +37,18 @@ impl SortExec {
             })
             .collect::<PolarsResult<Vec<_>>>()?;
 
-        let df = df.sort_impl(by_columns, self.sort_options.clone(), self.slice)?;
-        println!("slice: {:?}", self.slice);
+        let (df, perm) = df.sort_impl(by_columns, self.sort_options.clone(), self.slice)?;
+        let perm = perm
+            .into_iter()
+            .map(|idx| idx.unwrap_or_default() as _)
+            .collect();
 
         if state.policy_check {
             let plan_arg = PlanArgument {
                 // Sort does nothing but sort the data.
-                argument: Some(Argument::Transform(TransformArgument{})),
+                argument: Some(Argument::Transform(TransformArgument {})),
                 transform_info: Some(TransformInfo {
-                    information: Some(Information::Reorder(ReorderInformation { perm: vec![] })),
+                    information: Some(Information::Reorder(ReorderInformation { perm })),
                 }),
             };
 

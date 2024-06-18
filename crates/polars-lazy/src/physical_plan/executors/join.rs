@@ -1,4 +1,4 @@
-use picachv::{transform_info::Information, JoinInformation, TransformInfo};
+use picachv::{plan_argument::Argument, transform_info::Information, JoinInformation, PlanArgument, TransformArgument, TransformInfo};
 use polars_ops::frame::DataFrameJoinOps;
 use uuid::Uuid;
 
@@ -166,6 +166,8 @@ impl Executor for JoinExec {
             ti.lhs_df_uuid = lhs_df_uuid.to_bytes_le().to_vec();
             ti.rhs_df_uuid = rhs_df_uuid.to_bytes_le().to_vec();
 
+            println!("lhs = {}, rhs = {}, right_on = {:?}", lhs_df_uuid, rhs_df_uuid, right_on_series.iter().map(|e| e.name()).collect::<Vec<_>>());
+
             let df = df_left._join_impl(
                 &df_right,
                 left_on_series,
@@ -193,12 +195,15 @@ impl Executor for JoinExec {
         }, profile_name)?;
 
         if state.policy_check {
-            state.transform.replace(TransformInfo { information: Some(
-                Information::Join(ti)
-            ) });
-            self.execute_epilogue(state, None)?;
+            let arg = PlanArgument {
+                argument: Some(Argument::Transform(TransformArgument {})),
+                transform_info: Some(TransformInfo { information: Some(
+                    Information::Join(ti)
+                ) }),
+            };
+            
+            self.execute_epilogue(state, Some(arg))?;
         }
-
 
         Ok(df)
     }

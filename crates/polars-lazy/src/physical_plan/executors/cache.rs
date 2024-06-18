@@ -17,9 +17,13 @@ impl Executor for CacheExec {
 
         let df = cache.1.get_or_try_init(|| {
             cache_hit = false;
-            self.input.execute(state)
+            self.input.execute(state).map(|mut df| {
+                df.set_uuid(state.active_df_uuid);
+                df
+            })
         })?;
 
+        state.set_active_df_uuid(df.get_uuid());
         // Decrement count on cache hits.
         if cache_hit && previous == 0 {
             state.remove_df_cache(self.id);

@@ -323,7 +323,7 @@ impl SeriesTrait for SeriesWrap<StructChunked> {
 
         let multi_options = SortMultipleOptions::from(&options).with_order_descendings(desc);
 
-        let out = df.sort_impl(df.columns.clone(), multi_options, None)?;
+        let out = df.sort_impl(df.columns.clone(), multi_options, None)?.0;
         Ok(StructChunked::new_unchecked(self.name(), &out.columns).into_series())
     }
 
