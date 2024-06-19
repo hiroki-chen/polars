@@ -232,8 +232,6 @@ impl PhysicalExpr for BinaryExpr {
         );
 
         if state.policy_check {
-            println!("lhs {} rhs {}", lhs.len(), rhs.len());
-            println!("df:\n{df}");
             // do the expression reification.
             let values = inputs_as_arrow(&[lhs.clone(), rhs.clone()])?;
 

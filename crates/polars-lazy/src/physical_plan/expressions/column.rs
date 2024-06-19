@@ -177,6 +177,8 @@ impl PhysicalExpr for ColumnExpr {
     }
 
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
+        println!("now schema becomes: {:?}", self.schema);
+
         // Try to get its name!
         let out = match &self.schema {
             None => self.process_by_linear_search(df, state, false),
@@ -188,6 +190,7 @@ impl PhysicalExpr for ColumnExpr {
                         match df.get_columns().get(idx) {
                             Some(out) => {
                                 if state.policy_check {
+                                    println!("column reification: {} for {}", idx, self.name);
                                     let idx = idx.to_le_bytes();
                                     reify_expression(state.ctx_id, self.expr_id, &idx).map_err(
                                         |e| PolarsError::ComputeError(e.to_string().into()),

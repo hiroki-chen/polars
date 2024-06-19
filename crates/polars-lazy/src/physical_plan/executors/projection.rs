@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use picachv::plan_argument::Argument;
 use picachv::{PlanArgument, ProjectionArgument};
 use polars_core::utils::accumulate_dataframes_vertical_unchecked;
@@ -160,7 +162,6 @@ impl Executor for ProjectionExec {
                 transform_info: state.transform.clone(),
             };
             self.execute_epilogue(state, Some(plan_arg))?;
-            println!("after scan: uuid = {}", state.active_df_uuid);
         }
 
         Ok(df)

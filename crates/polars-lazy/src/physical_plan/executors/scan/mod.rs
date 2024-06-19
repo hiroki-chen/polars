@@ -95,6 +95,12 @@ impl Executor for DataFrameExec {
         let df = mem::take(&mut self.df);
         let mut df = Arc::try_unwrap(df).unwrap_or_else(|df| (*df).clone());
 
+        let old_df_names = df
+            .get_column_names()
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<_>>();
+
         // projection should be before selection as those are free
         // TODO: this is only the case if we don't create new columns
         if let Some(projection) = &self.projection {
@@ -136,7 +142,9 @@ impl Executor for DataFrameExec {
                     let project_list = project_list
                         .iter()
                         .map(|s| {
-                            df.get_column_index(s)
+                            old_df_names
+                                .iter()
+                                .position(|e| e == s)
                                 .ok_or(PolarsError::ComputeError(
                                     format!("Column {} not found", s).into(),
                                 ))
