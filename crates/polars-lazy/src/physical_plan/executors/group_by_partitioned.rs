@@ -383,8 +383,6 @@ impl Executor for PartitionGroupByExec {
             self.execute_impl(state, original_df)
         }?;
 
-        println!("df => {df}");
-
         if state.policy_check {
             // bug: the content has been tampered.
             let gb = Some(state.last_used_groupby.clone());

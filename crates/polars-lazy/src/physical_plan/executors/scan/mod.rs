@@ -20,7 +20,7 @@ pub(crate) use ipc::IpcExec;
 #[cfg(feature = "parquet")]
 pub(crate) use parquet::ParquetExec;
 use picachv::get_data_argument::DataSource;
-use picachv::get_data_in_memory::{ByName, ProjectionList};
+use picachv::get_data_in_memory::ProjectList;
 use picachv::{plan_argument, GetDataArgument, GetDataInMemory, PlanArgument, TransformInfo};
 #[cfg(any(feature = "ipc", feature = "parquet"))]
 use polars_io::predicates::PhysicalIoExpr;
@@ -131,6 +131,23 @@ impl Executor for DataFrameExec {
         };
 
         if state.policy_check {
+            let project_list = match self.projection.as_ref() {
+                Some(project_list) => {
+                    let project_list = project_list
+                        .iter()
+                        .map(|s| {
+                            df.get_column_index(s)
+                                .ok_or(PolarsError::ComputeError(
+                                    format!("Column {} not found", s).into(),
+                                ))
+                                .map(|e| e as u64)
+                        })
+                        .collect::<PolarsResult<Vec<_>>>()?;
+
+                    Some(ProjectList { project_list })
+                },
+                None => None,
+            };
             let plan_arg = PlanArgument {
                 argument: Some(plan_argument::Argument::GetData(GetDataArgument {
                     data_source: Some(DataSource::InMemory(GetDataInMemory {
@@ -139,16 +156,7 @@ impl Executor for DataFrameExec {
                             .selection
                             .as_ref()
                             .map(|e| e.get_uuid().to_bytes_le().to_vec()),
-                        projection_list: Some(ProjectionList::ByName(ByName {
-                            project_list: self
-                                .projection
-                                .as_ref()
-                                .cloned()
-                                .unwrap_or_default()
-                                .iter()
-                                .map(|s| s.clone())
-                                .collect::<Vec<_>>(),
-                        })),
+                        project_list,
                     })),
                 })),
                 transform_info: state.transform.clone(),

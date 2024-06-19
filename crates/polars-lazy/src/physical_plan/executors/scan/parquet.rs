@@ -402,6 +402,23 @@ impl Executor for ParquetExec {
         if state.policy_check {
             state.active_df_uuid = 
                 register_policy_dataframe_json(state.ctx_id, self.with_policy.as_ref().unwrap().as_path().to_str().unwrap()).map_err(|e| PolarsError::InvalidOperation(e.to_string().into()))?;
+            let project_list = match self.file_options.with_columns.as_ref() {
+                    Some(project_list) => {
+                        let project_list = project_list
+                            .iter()
+                            .map(|s| {
+                                df.get_column_index(s)
+                                    .ok_or(PolarsError::ComputeError(
+                                        format!("Column {} not found", s).into(),
+                                    ))
+                                    .map(|e| e as u64)
+                            })
+                            .collect::<PolarsResult<Vec<_>>>()?;
+    
+                        Some(ProjectList { project_list })
+                    },
+                    None => None,
+                };
 
             // Then construct the plan argument and execute the epilogue.
             let plan_arg = PlanArgument {
@@ -409,11 +426,7 @@ impl Executor for ParquetExec {
                     data_source: Some(DataSource::InMemory(GetDataInMemory {
                         df_uuid: state.active_df_uuid.clone().to_bytes_le().to_vec(),
                         pred: None,
-                        projection_list: self.file_options.with_columns.as_ref().map(|pl| {
-                            ProjectionList::ByName(ByName {
-                                project_list: pl.iter().map(|e| (*e).clone()).collect(),
-                            })
-                        }),
+                        project_list,
                     })),
                 })),
                 transform_info: state.transform.clone(),
