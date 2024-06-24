@@ -229,6 +229,8 @@ pub trait JoinDispatch: IntoDf {
         ca_self._take_unchecked_slice_sorted(idx, true, IsSorted::Ascending)
     }
 
+    // todo: implement this.
+    // set rhs projection = []
     #[cfg(feature = "semi_anti_join")]
     fn _semi_anti_join_from_series(
         &self,
@@ -237,12 +239,28 @@ pub trait JoinDispatch: IntoDf {
         slice: Option<(i64, usize)>,
         anti: bool,
         join_nulls: bool,
+        ti: &mut picachv::JoinInformation,
     ) -> PolarsResult<DataFrame> {
         let ca_self = self.to_df();
         #[cfg(feature = "dtype-categorical")]
         _check_categorical_src(s_left.dtype(), s_right.dtype())?;
 
         let idx = s_left.hash_join_semi_anti(s_right, anti, join_nulls);
+
+        for l in idx.iter() {
+            ti.row_join_info.push(RowJoinInformation {
+                left_row: *l as u64,
+                right_row: 0,
+            });
+        }
+
+        ti.left_columns = ca_self
+            .get_column_names()
+            .iter()
+            .enumerate()
+            .map(|(i, _)| i as u64)
+            .collect();
+
         // SAFETY:
         // indices are in bounds
         Ok(unsafe { ca_self._finish_anti_semi_join(&idx, slice) })

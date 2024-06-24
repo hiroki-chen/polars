@@ -1,24 +1,46 @@
 use std::borrow::Cow;
 
+use picachv::expr_argument::Argument;
+use picachv::native::build_expr;
+use picachv::ExprArgument;
 use polars_core::prelude::*;
 use polars_plan::constants::LEN;
+use uuid::Uuid;
 
 use crate::physical_plan::state::ExecutionState;
 use crate::prelude::*;
 
 pub struct CountExpr {
     expr: Expr,
+    expr_uuid: Uuid,
 }
 
 impl CountExpr {
-    pub(crate) fn new() -> Self {
-        Self { expr: Expr::Len }
+    pub(crate) fn new(ctx_id: Uuid, policy_check: bool) -> PolarsResult<Self> {
+        let expr_uuid = if policy_check {
+            let expr_arg = ExprArgument {
+                argument: Some(Argument::Count(picachv::CountExpr {})),
+            };
+            build_expr(ctx_id, expr_arg)
+                .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?
+        } else {
+            Uuid::new_v4()
+        };
+
+        Ok(Self {
+            expr: Expr::Len,
+            expr_uuid,
+        })
     }
 }
 
 impl PhysicalExpr for CountExpr {
     fn as_expression(&self) -> Option<&Expr> {
         Some(&self.expr)
+    }
+
+    fn get_uuid(&self) -> Uuid {
+        self.expr_uuid
     }
 
     fn evaluate(&self, df: &DataFrame, _state: &ExecutionState) -> PolarsResult<Series> {

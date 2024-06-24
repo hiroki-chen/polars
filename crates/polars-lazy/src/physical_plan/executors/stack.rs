@@ -128,7 +128,6 @@ impl Executor for StackExec {
         } else {
             self.execute_impl(state, df)
         }?;
-        println!("after execute: {}", df);
 
         if state.policy_check {
             let arg = PlanArgument {

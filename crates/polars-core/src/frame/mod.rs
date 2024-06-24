@@ -231,8 +231,8 @@ impl DataFrame {
         let mut first_len = None;
 
         let shape_err = |&first_name, &first_len, &name, &len| {
-            polars_bail!(
-                ShapeMismatch: "could not create a new DataFrame: series {:?} has length {} \
+            panic!(
+                "could not create a new DataFrame: series {:?} has length {} \
                 while series {:?} has length {}",
                 first_name, first_len, name, len
             );

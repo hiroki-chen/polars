@@ -78,6 +78,7 @@ pub struct ExecutionState {
     pub(super) ctx_id: Uuid,
     pub(super) active_df_uuid: Uuid,
     pub(super) transform: Option<TransformInfo>,
+    // FIXME: Buggy.
     pub(super) last_used_groupby: (Vec<u64>, Vec<Vec<u64>>), // calling `idx.clone()` causes data corruption.
     pub(super) policy_check: bool,
 }

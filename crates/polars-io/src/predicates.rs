@@ -24,7 +24,7 @@ pub fn apply_predicate(
     df: &mut DataFrame,
     predicate: Option<&dyn PhysicalIoExpr>,
     parallel: bool,
-) -> PolarsResult<()> {
+) -> PolarsResult<Option<BooleanChunked>> {
     if let (Some(predicate), false) = (&predicate, df.is_empty()) {
         let s = predicate.evaluate_io(df)?;
         let mask = s.bool().expect("filter predicates was not of type boolean");
@@ -34,8 +34,10 @@ pub fn apply_predicate(
         } else {
             *df = df._filter_seq(mask)?;
         }
+
+        return Ok(Some(mask.clone()));
     }
-    Ok(())
+    Ok(None)
 }
 
 /// Statistics of the values in a column.

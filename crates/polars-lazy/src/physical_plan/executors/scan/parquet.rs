@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
 use picachv::native::register_policy_dataframe_json;
+use picachv::transform_info::Information;
+use picachv::FilterInformation;
 use polars_core::config;
 #[cfg(feature = "cloud")]
 use polars_core::config::{get_file_prefetch_size, verbose};
@@ -135,7 +137,7 @@ impl ParquetExec {
                             reader
                                 .with_n_rows(remaining_rows_to_read)
                                 .with_row_index(row_index)
-                                .with_predicate(predicate.clone())
+                                // .with_predicate(predicate.clone())
                                 .with_projection(projection.clone())
                                 .finish()
                         },
@@ -315,17 +317,18 @@ impl ParquetExec {
         Ok(result)
     }
 
-    fn read(&mut self) -> PolarsResult<DataFrame> {
+    fn read(&mut self) -> PolarsResult<(DataFrame, Option<BooleanChunked>)> {
         // FIXME: The row index implementation is incorrect when a predicate is
         // applied. This code mitigates that by applying the predicate after the
         // collection of the entire dataframe if a row index is requested. This is
         // inefficient.
-        let post_predicate = self
-            .file_options
-            .row_index
-            .as_ref()
-            .and_then(|_| self.predicate.take())
-            .map(phys_expr_to_io_expr);
+        // let post_predicate = self
+        //     .file_options
+        //     .row_index
+        //     .as_ref()
+        //     .and_then(|_| self.predicate.take())
+        //     .map(phys_expr_to_io_expr);
+        let post_predicate = self.predicate.clone().map(phys_expr_to_io_expr);
 
         let is_cloud = match self.paths.first() {
             Some(p) => is_cloud_url(p.as_path()),
@@ -342,12 +345,12 @@ impl ParquetExec {
                     self.file_options.row_index.is_some(),
                     hive_partitions.as_deref(),
                 );
-                return Ok(materialize_empty_df(
+                return Ok((materialize_empty_df(
                     projection.as_deref(),
                     self.file_info.reader_schema.as_ref().unwrap(),
                     hive_partitions.as_deref(),
                     self.file_options.row_index.as_ref(),
-                ));
+                ), None));
             },
         };
         let force_async = config::force_async();
@@ -371,13 +374,16 @@ impl ParquetExec {
         };
 
         let mut out = accumulate_dataframes_vertical(out)?;
-
+        let mask = match post_predicate.as_ref() {
+            Some(mask) => Some(mask.evaluate_io(&out)?.bool()?.clone()),
+            None => None,
+        };
         polars_io::predicates::apply_predicate(&mut out, post_predicate.as_deref(), true)?;
 
         if self.file_options.rechunk {
             out.as_single_chunk_par();
         }
-        Ok(out)
+        Ok((out, mask))
     }
 }
 
@@ -397,7 +403,8 @@ impl Executor for ParquetExec {
             Cow::Borrowed("")
         };
 
-        let df = state.record(|| self.read(), profile_name)?;
+        let (df, mask) = state.record(|| self.read(), profile_name)?;
+        println!("parquet_scan: df => {df}");
 
         if state.policy_check {
             state.active_df_uuid = 
@@ -429,7 +436,16 @@ impl Executor for ParquetExec {
                         project_list,
                     })),
                 })),
-                transform_info: state.transform.clone(),
+                transform_info: match mask {
+                    Some(mask) => Some(TransformInfo {
+                        information: Some(
+                            Information::Filter(FilterInformation {
+                                filter: mask.iter().map(|e| e.unwrap_or_default()).collect()
+                            })
+                        )
+                    }),
+                    None => state.transform.clone(),
+                }
             };
 
             self.execute_epilogue(state, Some(plan_arg))?;

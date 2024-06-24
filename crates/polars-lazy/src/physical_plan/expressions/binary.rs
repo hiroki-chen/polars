@@ -1,3 +1,5 @@
+use core::panic;
+
 use picachv::expr_argument::Argument;
 use picachv::native::{build_expr, reify_expression};
 use picachv::ExprArgument;
@@ -233,6 +235,16 @@ impl PhysicalExpr for BinaryExpr {
 
         if state.policy_check {
             // do the expression reification.
+            let (lhs, rhs) = if lhs.len() == 1 {
+                // Make lhs and rhs the same length.
+                (lhs.new_from_index(0, rhs.len()), rhs.clone())
+            } else if rhs.len() == 1 {
+                // Make lhs and rhs the same length.
+                (lhs.clone(), rhs.new_from_index(0, lhs.len()))
+            } else {
+                (lhs.clone(), rhs.clone())
+            };
+
             let values = inputs_as_arrow(&[lhs.clone(), rhs.clone()])?;
 
             reify_expression(state.ctx_id, self.expr_id, &values)
@@ -259,7 +271,24 @@ impl PhysicalExpr for BinaryExpr {
         let ac_r = result_b?;
 
         if state.policy_check {
-            let bytes = inputs_as_arrow(&[ac_l.series().clone(), ac_r.series().clone()])?;
+            // do the expression reification.
+            let (ac_l, ac_r) = if ac_l.series().len() == 1 {
+                // Make lhs and rhs the same length.
+                (
+                    ac_l.series().new_from_index(0, ac_r.series().len()),
+                    ac_r.series().clone(),
+                )
+            } else if ac_r.series().len() == 1 {
+                // Make lhs and rhs the same length.
+                (
+                    ac_l.series().clone(),
+                    ac_r.series().new_from_index(0, ac_l.series().len()),
+                )
+            } else {
+                (ac_l.series().clone(), ac_r.series().clone())
+            };
+
+            let bytes = inputs_as_arrow(&[ac_l.clone(), ac_r.clone()])?;
             reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
                 PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
             })?;
@@ -442,7 +471,7 @@ mod stats {
                     (DataType::String, DataType::Categorical(_, _) | DataType::Enum(_, _)) => {},
                     #[cfg(feature = "dtype-categorical")]
                     (DataType::Categorical(_, _) | DataType::Enum(_, _), DataType::String) => {},
-                    (l, r) if l != r => panic!("implementation error: {l:?}, {r:?}"),
+                    (l, r) if l != r => ::std::panic!("implementation error: {l:?}, {r:?}"),
                     _ => {},
                 }
             }
@@ -518,10 +547,19 @@ impl PartitionedAggregation for BinaryExpr {
         groups: &GroupsProxy,
         state: &ExecutionState,
     ) -> PolarsResult<Series> {
+        // TODO: Reify this.
         let left = self.left.as_partitioned_aggregator().unwrap();
         let right = self.right.as_partitioned_aggregator().unwrap();
         let left = left.evaluate_partitioned(df, groups, state)?;
         let right = right.evaluate_partitioned(df, groups, state)?;
+
+        if state.policy_check {
+            let values = inputs_as_arrow(&[left.clone(), right.clone()])?;
+            reify_expression(state.ctx_id, self.expr_id, &values).map_err(|e| {
+                PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
+            })?;
+        }
+
         apply_operator(&left, &right, self.op)
     }
 

@@ -111,7 +111,6 @@ impl ExpressionConversionState {
         }
     }
     fn reset(&mut self) {
-
         self.local = Default::default()
     }
 
@@ -159,13 +158,11 @@ fn create_physical_expr_inner(
     use AExpr::*;
 
     let expr = expr_arena.get(expression).clone();
-    println!("state.policy_check: {}", state.policy_check);
-    if !state.policy_check {
-        panic!("aaaa");
-    }
-
     match expr {
-        Len => Ok(Arc::new(phys_expr::CountExpr::new())),
+        Len => Ok(Arc::new(phys_expr::CountExpr::new(
+            state.ctx_id,
+            state.policy_check,
+        )?)),
         Window {
             mut function,
             partition_by,
@@ -475,13 +472,14 @@ fn create_physical_expr_inner(
                             panic!("agg groups expression only supported in aggregation context")
                         },
                     };
+                    // FIXME: Aggregation will now turn into an apply expression.
                     Ok(Arc::new(ApplyExpr::new_minimal(
                         vec![input],
                         function,
                         None,
                         node_to_expr(expression, expr_arena),
                         ApplyOptions::ElementWise,
-                    )))
+                    )?))
                 },
                 _ => {
                     if let AAggExpr::Quantile {

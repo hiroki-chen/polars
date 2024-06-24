@@ -329,6 +329,15 @@ impl PartitionGroupByExec {
             groups = sliced_groups.as_deref().unwrap();
         }
 
+        if let GroupsProxy::Idx(idx) = groups {
+            state.last_used_groupby.0 = idx.first().iter().map(|&e| e as u64).collect();
+            state.last_used_groupby.1 = idx
+                .all()
+                .iter()
+                .map(|e| e.iter().map(|&e| e as u64).collect())
+                .collect();
+        }
+
         let get_columns = || gb.keys_sliced(self.slice);
         let get_agg = || {
             let out: PolarsResult<Vec<_>> = self
@@ -384,22 +393,18 @@ impl Executor for PartitionGroupByExec {
         }?;
 
         if state.policy_check {
-            // bug: the content has been tampered.
             let gb = Some(state.last_used_groupby.clone());
             let plan_arg = PlanArgument {
                 argument: Some(Argument::Aggregate(AggregateArgument {
                     keys: self
                         .phys_keys
-                        .iter()
+                        .par_iter()
                         .map(|e| e.get_uuid().to_bytes_le().to_vec())
                         .collect(),
                     aggs_uuid: self
                         .phys_aggs
-                        .iter()
-                        .map(|e| {
-                            println!("this is {}", e.get_name());
-                            e.get_uuid().to_bytes_le().to_vec()
-                        })
+                        .par_iter()
+                        .map(|e| e.get_uuid().to_bytes_le().to_vec())
                         .collect(),
                     maintain_order: self.maintain_order,
                     group_by_proxy: gb.map(|gb| GroupByProxy {
@@ -418,7 +423,7 @@ impl Executor for PartitionGroupByExec {
                     output_schema: self
                         .output_schema
                         .get_names()
-                        .into_iter()
+                        .into_par_iter()
                         .map(|s| s.to_string())
                         .collect(),
                 })),

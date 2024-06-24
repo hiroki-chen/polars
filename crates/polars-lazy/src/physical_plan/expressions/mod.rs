@@ -644,7 +644,7 @@ pub trait PhysicalExpr: Send + Sync {
     fn get_name(&self) -> &str;
 
     fn get_uuid(&self) -> Uuid {
-        unimplemented!("should be implemented by the expr")
+        unimplemented!("should be implemented by the expr: {}", self.get_name())
     }
 
     /// Take a DataFrame and evaluate the expression.

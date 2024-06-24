@@ -231,6 +231,7 @@ pub trait DataFrameJoinOps: IntoDf {
                     args.slice,
                     true,
                     args.join_nulls,
+                    ti,
                 ),
                 #[cfg(feature = "semi_anti_join")]
                 JoinType::Semi => left_df._semi_anti_join_from_series(
@@ -239,6 +240,7 @@ pub trait DataFrameJoinOps: IntoDf {
                     args.slice,
                     false,
                     args.join_nulls,
+                    ti,
                 ),
                 #[cfg(feature = "asof_join")]
                 JoinType::AsOf(options) => {
