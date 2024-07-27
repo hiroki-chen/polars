@@ -43,6 +43,7 @@ impl FilterExec {
         if self.has_window {
             state.insert_has_window_function_flag()
         }
+
         let s = self.predicate.evaluate(&df, state)?;
         if self.has_window {
             state.clear_window_expr_cache()
@@ -52,7 +53,9 @@ impl FilterExec {
             .iter()
             .map(|e| e.ok_or(PolarsError::ComputeError("Filter downcast failed".into())))
             .collect::<PolarsResult<Vec<_>>>()?;
+
         let df = df.filter(pred)?;
+
         state.transform.replace(
             TransformInfo::from_filter(&pred_bool)
                 .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?,
@@ -103,6 +106,7 @@ impl FilterExec {
         if self.streamable && df.height() > 0 {
             if df.n_chunks() > 1 {
                 let chunks = df.split_chunks().collect::<Vec<_>>();
+
                 self.execute_chunks(chunks, state)
             } else if df.width() < n_partitions {
                 self.execute_hor(df, state)
@@ -133,17 +137,19 @@ impl Executor for FilterExec {
             Cow::Borrowed("")
         };
 
-        let df = state.clone().record(
-            || {
-                let df = self.execute_impl(df, state);
-                if state.verbose() {
-                    eprintln!("dataframe filtered");
-                }
-                df
-            },
-            profile_name,
-        )?;
-
+        let df = state
+            .clone()
+            .record(
+                || {
+                    let df = self.execute_impl(df, state);
+                    if state.verbose() {
+                        eprintln!("dataframe filtered");
+                    }
+                    df
+                },
+                profile_name,
+            )
+            .unwrap();
         if state.policy_check {
             let plan_arg = PlanArgument {
                 argument: Some(Argument::Select(SelectArgument {

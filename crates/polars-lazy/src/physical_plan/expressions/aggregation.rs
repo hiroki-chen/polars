@@ -65,6 +65,7 @@ fn arg_to_expr(
                 GroupByMethod::Mean => picachv::GroupByMethod::Mean,
                 GroupByMethod::Min => picachv::GroupByMethod::Min,
                 GroupByMethod::Max => picachv::GroupByMethod::Max,
+                GroupByMethod::Count { .. } => picachv::GroupByMethod::Len,
                 _ => polars_bail!(ComputeError: "Aggregation method not supported: {:?}", agg_type),
             } as _,
         })),
@@ -134,7 +135,7 @@ impl PhysicalExpr for AggregationExpr {
                     let agg_s = s.agg_mean(&groups);
 
                     if state.policy_check {
-                        let bytes = inputs_as_arrow(&[agg_s.clone()])?;
+                        let bytes = inputs_as_arrow(&[&agg_s])?;
                         reify_expression(state.ctx_id, self.expr_uuid, &bytes)
                             .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
                     }
@@ -146,7 +147,7 @@ impl PhysicalExpr for AggregationExpr {
                     let agg_s = s.agg_sum(&groups);
 
                     if state.policy_check {
-                        let bytes = inputs_as_arrow(&[agg_s.clone()])?;
+                        let bytes = inputs_as_arrow(&[&agg_s])?;
                         reify_expression(state.ctx_id, self.expr_uuid, &bytes)
                             .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
                     }

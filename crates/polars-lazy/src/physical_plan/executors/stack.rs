@@ -120,7 +120,6 @@ impl Executor for StackExec {
         } else {
             Cow::Borrowed("")
         };
-        println!("stack: {}", df);
 
         let df = if state.has_node_timer() {
             let new_state = state.clone();

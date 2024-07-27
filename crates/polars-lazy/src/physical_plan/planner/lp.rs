@@ -510,7 +510,6 @@ pub fn create_physical_plan(
                     aggs,
                 )))
             } else {
-                println!("debug: create_physical_plan GroupByExec {ctx_id}");
                 let input =
                     create_physical_plan(input, lp_arena, expr_arena, ctx_id, policy_check)?;
                 Ok(Box::new(executors::GroupByExec::new(

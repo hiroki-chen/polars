@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use picachv::native::register_policy_dataframe_json;
+use picachv::native::{register_policy_dataframe_bin, register_policy_dataframe_parquet};
 use picachv::transform_info::Information;
 use picachv::FilterInformation;
 use polars_core::config;
@@ -404,11 +404,16 @@ impl Executor for ParquetExec {
         };
 
         let (df, mask) = state.record(|| self.read(), profile_name)?;
-        println!("parquet_scan: df => {df}");
 
         if state.policy_check {
+            let filter = mask.as_ref().map(|mask| mask.iter().map(|e| e.unwrap_or_default()).collect::<Vec<_>>());
+            let projection = match materialize_projection(self.file_options.with_columns.as_ref().map(|e| e.as_slice()), &self.file_info.schema, None, false) {
+                Some(proj) => proj,
+                None => df.fields().iter().enumerate().map(|(i, _)| i as usize).collect::<Vec<_>>(),
+            };
+
             state.active_df_uuid = 
-                register_policy_dataframe_json(state.ctx_id, self.with_policy.as_ref().unwrap().as_path().to_str().unwrap()).map_err(|e| PolarsError::InvalidOperation(e.to_string().into()))?;
+            register_policy_dataframe_parquet(state.ctx_id, self.with_policy.as_ref().unwrap().as_path().to_str().unwrap(), &projection, filter.as_ref().map(|f| f.as_slice())).map_err(|e| PolarsError::InvalidOperation(e.to_string().into()))?;
             let project_list = match self.file_options.with_columns.as_ref() {
                     Some(project_list) => {
                         let project_list = project_list
@@ -436,16 +441,7 @@ impl Executor for ParquetExec {
                         project_list,
                     })),
                 })),
-                transform_info: match mask {
-                    Some(mask) => Some(TransformInfo {
-                        information: Some(
-                            Information::Filter(FilterInformation {
-                                filter: mask.iter().map(|e| e.unwrap_or_default()).collect()
-                            })
-                        )
-                    }),
-                    None => state.transform.clone(),
-                }
+                transform_info: state.transform.clone(),
             };
 
             self.execute_epilogue(state, Some(plan_arg))?;

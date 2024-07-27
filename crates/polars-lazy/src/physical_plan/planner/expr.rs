@@ -479,7 +479,7 @@ fn create_physical_expr_inner(
                         None,
                         node_to_expr(expression, expr_arena),
                         ApplyOptions::ElementWise,
-                    )?))
+                    )))
                 },
                 _ => {
                     if let AAggExpr::Quantile {
@@ -555,7 +555,9 @@ fn create_physical_expr_inner(
                 falsy,
                 node_to_expr(expression, expr_arena),
                 lit_count < 2,
-            )))
+                state.ctx_id,
+                state.policy_check,
+            )?))
         },
         AnonymousFunction {
             input,

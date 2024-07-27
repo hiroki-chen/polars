@@ -159,7 +159,12 @@ impl Operator for CrossJoinProbe {
                             (&self.in_process_left_df, &right_df)
                         };
 
-                        let mut df = a.cross_join(b, Some(self.suffix.as_ref()), None)?;
+                        let mut df = a.cross_join(
+                            b,
+                            Some(self.suffix.as_ref()),
+                            None,
+                            &mut Default::default(),
+                        )?;
                         // Cross joins can produce multiple chunks.
                         // No parallelize in operators
                         df.as_single_chunk();
@@ -183,7 +188,12 @@ impl Operator for CrossJoinProbe {
                 // this we can amortize the name allocations.
                 let mut df = match &self.output_names {
                     None => {
-                        let df = a.cross_join(b, Some(self.suffix.as_ref()), None)?;
+                        let df = a.cross_join(
+                            b,
+                            Some(self.suffix.as_ref()),
+                            None,
+                            &mut Default::default(),
+                        )?;
                         self.output_names = Some(df.get_column_names_owned());
                         df
                     },

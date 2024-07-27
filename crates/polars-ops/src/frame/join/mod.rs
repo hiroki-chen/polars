@@ -96,7 +96,13 @@ pub trait DataFrameJoinOps: IntoDf {
         let df_left = self.to_df();
         #[cfg(feature = "cross_join")]
         if let JoinType::Cross = args.how {
-            return df_left.cross_join(other, args.suffix.as_deref(), None);
+            println!("this?");
+            return df_left.cross_join(
+                other,
+                args.suffix.as_deref(),
+                None,
+                &mut Default::default(),
+            );
         }
         let selected_left = df_left.select_series(left_on)?;
         let selected_right = other.select_series(right_on)?;
@@ -124,14 +130,12 @@ pub trait DataFrameJoinOps: IntoDf {
         _verbose: bool,
         ti: &mut JoinInformation,
     ) -> PolarsResult<DataFrame> {
-        println!("args: {args:?}");
-
         let left_df = self.to_df();
         args.validation.is_valid_join(&args.how)?;
 
         #[cfg(feature = "cross_join")]
         if let JoinType::Cross = args.how {
-            return left_df.cross_join(other, args.suffix.as_deref(), args.slice);
+            return left_df.cross_join(other, args.suffix.as_deref(), args.slice, ti);
         }
 
         #[cfg(feature = "chunked_ids")]

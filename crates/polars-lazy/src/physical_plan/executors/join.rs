@@ -166,8 +166,6 @@ impl Executor for JoinExec {
             ti.lhs_df_uuid = lhs_df_uuid.to_bytes_le().to_vec();
             ti.rhs_df_uuid = rhs_df_uuid.to_bytes_le().to_vec();
 
-            println!("lhs = {}, rhs = {}, right_on = {:?}", lhs_df_uuid, rhs_df_uuid, right_on_series.iter().map(|e| e.name()).collect::<Vec<_>>());
-
             let df = df_left._join_impl(
                 &df_right,
                 left_on_series,

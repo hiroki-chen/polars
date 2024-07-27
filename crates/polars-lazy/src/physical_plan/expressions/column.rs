@@ -150,16 +150,17 @@ impl ColumnExpr {
         }
     }
 
-    fn process_cse(&self, df: &DataFrame, schema: &Schema) -> PolarsResult<Series> {
+    fn process_cse(&self, df: &DataFrame, schema: &Schema) -> PolarsResult<(usize, Series)> {
         // The CSE columns are added on the rhs.
         let offset = schema.len();
         let columns = &df.get_columns()[offset..];
         // Linear search will be relatively cheap as we only search the CSE columns.
         Ok(columns
             .iter()
-            .find(|s| s.name() == self.name.as_ref())
-            .unwrap()
-            .clone())
+            .enumerate()
+            .find(|(_, s)| s.name() == self.name.as_ref())
+            .map(|(idx, s)| (idx, s.clone()))
+            .unwrap())
     }
 }
 
@@ -211,7 +212,14 @@ impl PhysicalExpr for ColumnExpr {
                     // in debug builds we panic so that it can be fixed when occurring
                     None => {
                         if self.name.starts_with(CSE_REPLACED) {
-                            return self.process_cse(df, schema);
+                            let (idx, s) = self.process_cse(df, schema)?;
+                            if state.policy_check {
+                                let idx = idx.to_le_bytes();
+                                reify_expression(state.ctx_id, self.expr_id, &idx)
+                                    .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+                            }
+
+                            return Ok(s);
                         }
                         self.process_by_linear_search(df, state, true)
                     },

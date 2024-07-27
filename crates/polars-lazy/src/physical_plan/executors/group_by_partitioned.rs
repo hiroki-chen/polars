@@ -264,7 +264,6 @@ impl PartitionGroupByExec {
             let keys = self.keys(&original_df, state)?;
 
             if !can_run_partitioned(&keys, &original_df, state, self.from_partitioned_ds)? {
-                println!("execute_impl: cannot partitioned");
                 return group_by_helper(
                     original_df,
                     keys,

@@ -45,10 +45,27 @@ pub trait CrossJoin: IntoDf {
         other: &DataFrame,
         slice: Option<(i64, usize)>,
         parallel: bool,
+        ti: &mut JoinInformation,
     ) -> PolarsResult<(DataFrame, DataFrame)> {
         let df_self = self.to_df();
         let n_rows_left = df_self.height() as IdxSize;
         let n_rows_right = other.height() as IdxSize;
+
+        // if slice.is_none() {
+        ti.row_join_info = (0..n_rows_left)
+            .into_par_iter()
+            .map(|x| {
+                (0..n_rows_right)
+                    .into_par_iter()
+                    .map(move |y| RowJoinInformation {
+                        left_row: x as u64,
+                        right_row: y as u64,
+                    })
+            })
+            .flatten()
+            .collect();
+        // }
+
         let Some(total_rows) = n_rows_left.checked_mul(n_rows_right) else {
             polars_bail!(
                 ComputeError: "cross joins would produce more rows than fits into 2^32; \
@@ -101,7 +118,7 @@ pub trait CrossJoin: IntoDf {
         other: &DataFrame,
         names: &[SmartString],
     ) -> PolarsResult<DataFrame> {
-        let (mut l_df, r_df) = self.cross_join_dfs(other, None, false)?;
+        let (mut l_df, r_df) = self.cross_join_dfs(other, None, false, &mut Default::default())?;
 
         unsafe {
             l_df.get_columns_mut().extend_from_slice(r_df.get_columns());
@@ -124,10 +141,26 @@ pub trait CrossJoin: IntoDf {
         other: &DataFrame,
         suffix: Option<&str>,
         slice: Option<(i64, usize)>,
+        ti: &mut JoinInformation,
     ) -> PolarsResult<DataFrame> {
-        let (l_df, r_df) = self.cross_join_dfs(other, slice, true)?;
+        // we keep all left columns.
+        ti.left_columns = self
+            .to_df()
+            .get_column_names()
+            .iter()
+            .enumerate()
+            .map(|(i, _)| i as _)
+            .collect();
+        ti.right_columns = other
+            .get_column_names()
+            .iter()
+            .enumerate()
+            .map(|(i, _)| i as _)
+            .collect();
 
-        _finish_join(l_df, r_df, suffix, &mut Default::default())
+        let (l_df, r_df) = self.cross_join_dfs(other, slice, true, ti)?;
+
+        _finish_join(l_df, r_df, suffix, ti)
     }
 }
 

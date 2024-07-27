@@ -344,6 +344,7 @@ impl PhysicalExpr for ApplyExpr {
         }?;
 
         if state.policy_check {
+            let inputs = inputs.iter().map(|e| e).collect::<Vec<_>>();
             let bytes = inputs_as_arrow(&inputs)?;
             reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
                 PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
@@ -389,7 +390,7 @@ impl PhysicalExpr for ApplyExpr {
             }?;
 
             if state.policy_check {
-                let bytes = inputs_as_arrow(&[ac.series().clone()])?;
+                let bytes = inputs_as_arrow(&[ac.series()])?;
                 reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
                     PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
                 })?;
@@ -399,7 +400,7 @@ impl PhysicalExpr for ApplyExpr {
         } else {
             let mut acs = self.prepare_multiple_inputs(df, groups, state)?;
             if state.policy_check {
-                let values = acs.iter().map(|ac| ac.series().clone()).collect::<Vec<_>>();
+                let values = acs.iter().map(|ac| ac.series()).collect::<Vec<_>>();
                 let bytes = inputs_as_arrow(&values)?;
                 reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
                     PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())

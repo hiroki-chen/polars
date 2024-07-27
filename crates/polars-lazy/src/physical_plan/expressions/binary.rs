@@ -1,5 +1,3 @@
-use core::panic;
-
 use picachv::expr_argument::Argument;
 use picachv::native::{build_expr, reify_expression};
 use picachv::ExprArgument;
@@ -245,7 +243,7 @@ impl PhysicalExpr for BinaryExpr {
                 (lhs.clone(), rhs.clone())
             };
 
-            let values = inputs_as_arrow(&[lhs.clone(), rhs.clone()])?;
+            let values = inputs_as_arrow(&[&lhs, &rhs])?;
 
             reify_expression(state.ctx_id, self.expr_id, &values)
                 .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
@@ -288,7 +286,7 @@ impl PhysicalExpr for BinaryExpr {
                 (ac_l.series().clone(), ac_r.series().clone())
             };
 
-            let bytes = inputs_as_arrow(&[ac_l.clone(), ac_r.clone()])?;
+            let bytes = inputs_as_arrow(&[&ac_l, &ac_r])?;
             reify_expression(state.ctx_id, self.expr_id, &bytes).map_err(|e| {
                 PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
             })?;
@@ -554,7 +552,7 @@ impl PartitionedAggregation for BinaryExpr {
         let right = right.evaluate_partitioned(df, groups, state)?;
 
         if state.policy_check {
-            let values = inputs_as_arrow(&[left.clone(), right.clone()])?;
+            let values = inputs_as_arrow(&[&left, &right])?;
             reify_expression(state.ctx_id, self.expr_id, &values).map_err(|e| {
                 PolarsError::ComputeError(format!("Error evaluating expression: {}", e).into())
             })?;

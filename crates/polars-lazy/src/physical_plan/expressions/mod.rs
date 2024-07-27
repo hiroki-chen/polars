@@ -35,6 +35,7 @@ use polars_core::prelude::*;
 use polars_io::ipc::IpcStreamWriter;
 use polars_io::predicates::PhysicalIoExpr;
 use polars_io::SerWriter;
+use rayon::prelude::*;
 #[cfg(feature = "dynamic_group_by")]
 pub(crate) use rolling::RollingExpr;
 pub(crate) use slice::*;
@@ -770,19 +771,25 @@ pub trait PartitionedAggregation: Send + Sync + PhysicalExpr {
     ) -> PolarsResult<Series>;
 }
 
-pub(crate) fn inputs_as_arrow(inputs: &[Series]) -> PolarsResult<Vec<u8>> {
+pub(crate) fn inputs_as_arrow(inputs: &[&Series]) -> PolarsResult<Vec<u8>> {
     let bytes = {
         let mut v = vec![];
         let mut ipc_writer = IpcStreamWriter::new(&mut v);
 
-        let mut columns = vec![];
-        let max_len = inputs.iter().map(|s| s.len()).max().unwrap_or(0);
-        for col in inputs.iter() {
-            columns.push(match col.len() == max_len {
-                true => col.clone(),
-                false => col.new_from_index(0, max_len),
+        let max_len = inputs.par_iter().map(|s| s.len()).max().unwrap_or(0);
+        let columns = inputs
+            .into_par_iter()
+            .enumerate()
+            .map(|(idx, col)| {
+                let mut col = match col.len() == max_len {
+                    true => (*col).clone(),
+                    false => col.new_from_index(0, max_len),
+                };
+
+                col.rename(&format!("column_{}", idx));
+                col
             })
-        }
+            .collect::<Vec<Series>>();
 
         let mut df = DataFrame::new(columns)?;
         ipc_writer.finish(&mut df)?;

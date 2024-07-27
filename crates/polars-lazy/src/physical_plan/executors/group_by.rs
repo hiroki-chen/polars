@@ -75,8 +75,6 @@ pub(super) fn group_by_helper(
     maintain_order: bool,
     slice: Option<(i64, usize)>,
 ) -> PolarsResult<DataFrame> {
-    println!("group_by_helper");
-
     df.as_single_chunk_par();
     let gb = df.group_by_with_series(keys, true, maintain_order)?;
 
@@ -129,8 +127,6 @@ impl GroupByExec {
         state: &mut ExecutionState,
         df: DataFrame,
     ) -> PolarsResult<DataFrame> {
-        println!("execute_impl in GroupByExec");
-
         let keys = self
             .keys
             .iter()

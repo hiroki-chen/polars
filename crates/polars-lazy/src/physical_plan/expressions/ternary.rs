@@ -1,5 +1,9 @@
+use picachv::expr_argument::Argument;
+use picachv::native::{build_expr, reify_expression};
+use picachv::ExprArgument;
 use polars_core::prelude::*;
 use polars_core::POOL;
+use uuid::Uuid;
 
 use crate::physical_plan::state::ExecutionState;
 use crate::prelude::*;
@@ -11,6 +15,7 @@ pub struct TernaryExpr {
     expr: Expr,
     // Can be expensive on small data to run literals in parallel.
     run_par: bool,
+    expr_uuid: Uuid,
 }
 
 impl TernaryExpr {
@@ -20,14 +25,31 @@ impl TernaryExpr {
         falsy: Arc<dyn PhysicalExpr>,
         expr: Expr,
         run_par: bool,
-    ) -> Self {
-        Self {
+        ctx_id: Uuid,
+        policy_checking: bool,
+    ) -> PolarsResult<Self> {
+        let expr_uuid = if policy_checking {
+            let arg = ExprArgument {
+                argument: Some(Argument::Ternary(picachv::TernaryExpr {
+                    cond_uuid: predicate.get_uuid().to_bytes_le().to_vec(),
+                    then_uuid: truthy.get_uuid().to_bytes_le().to_vec(),
+                    else_uuid: falsy.get_uuid().to_bytes_le().to_vec(),
+                })),
+            };
+
+            build_expr(ctx_id, arg).map_err(|e| PolarsError::ComputeError(e.to_string().into()))?
+        } else {
+            Uuid::nil()
+        };
+
+        Ok(Self {
             predicate,
             truthy,
             falsy,
             expr,
             run_par,
-        }
+            expr_uuid,
+        })
     }
 }
 
@@ -82,12 +104,29 @@ impl PhysicalExpr for TernaryExpr {
         "Ternary"
     }
 
+    fn get_uuid(&self) -> Uuid {
+        self.expr_uuid
+    }
+
     fn evaluate(&self, df: &DataFrame, state: &ExecutionState) -> PolarsResult<Series> {
         let mut state = state.split();
         // Don't cache window functions as they run in parallel.
         state.remove_cache_window_flag();
         let mask_series = self.predicate.evaluate(df, &state)?;
         let mask = mask_series.bool()?.clone();
+
+        if state.policy_check {
+            let mask_bytes = mask
+                .iter()
+                .map(|e| {
+                    e.ok_or(PolarsError::ComputeError("no boolean".into()))
+                        .map(|b| b as u8)
+                })
+                .collect::<PolarsResult<Vec<_>>>()?;
+
+            reify_expression(state.ctx_id, self.expr_uuid, &mask_bytes)
+                .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+        }
 
         let op_truthy = || self.truthy.evaluate(df, &state);
         let op_falsy = || self.falsy.evaluate(df, &state);
