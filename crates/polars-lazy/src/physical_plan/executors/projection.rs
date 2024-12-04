@@ -52,7 +52,7 @@ impl ProjectionExec {
     ) -> PolarsResult<DataFrame> {
         // Vertical and horizontal parallelism.
         let df =
-            if self.streamable && df.n_chunks() > 1 && df.height() > 0 && self.options.run_parallel
+            if false && self.streamable && df.n_chunks() > 1 && df.height() > 0 && self.options.run_parallel
             {
                 let chunks = df.split_chunks().collect::<Vec<_>>();
                 let iter = chunks.into_par_iter().map(|mut df| {

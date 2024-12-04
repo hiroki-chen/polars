@@ -66,6 +66,7 @@ fn arg_to_expr(
                 GroupByMethod::Min => picachv::GroupByMethod::Min,
                 GroupByMethod::Max => picachv::GroupByMethod::Max,
                 GroupByMethod::Count { .. } => picachv::GroupByMethod::Len,
+                GroupByMethod::NUnique => picachv::GroupByMethod::Min,
                 _ => polars_bail!(ComputeError: "Aggregation method not supported: {:?}", agg_type),
             } as _,
         })),
