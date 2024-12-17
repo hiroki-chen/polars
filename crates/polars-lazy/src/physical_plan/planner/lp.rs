@@ -284,7 +284,8 @@ pub fn create_physical_plan(
                     file_options,
                     metadata,
                     with_policy,
-                ))),
+                    ctx_id,
+                )?)),
                 FileScan::Anonymous { function, .. } => {
                     Ok(Box::new(executors::AnonymousScanExec {
                         function,
@@ -478,8 +479,6 @@ pub fn create_physical_plan(
             // We first check if we can partition the group_by on the latest moment.
             let partitionable = partitionable_gb(&keys, &aggs, &input_schema, expr_arena, &apply);
             if partitionable {
-                println!("debug: create_physical_plan PartitionGroupByExec {ctx_id}");
-
                 let from_partitioned_ds = (&*lp_arena).iter(input).any(|(_, lp)| {
                     if let Union { options, .. } = lp {
                         options.from_partitioned_ds

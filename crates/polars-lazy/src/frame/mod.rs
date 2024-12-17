@@ -664,7 +664,12 @@ impl LazyFrame {
             self.prepare_collect(false, ctx_id, policy_check)?;
         state.set_ctx_id(ctx_id);
         state.set_policy_checking(policy_check);
+
+        let now = std::time::Instant::now();
         let df = physical_plan.execute(&mut state)?;
+        let elapsed = now.elapsed();
+
+        println!("elapsed time: {:?}", elapsed);
 
         if policy_check {
             finalize(ctx_id, state.get_active_df_uuid())

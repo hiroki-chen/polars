@@ -786,6 +786,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitmaps"
+version = "3.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1d084b0137aaa901caf9f1e8b21daa6aa24d41cd806e111335541eff9683bd6"
+
+[[package]]
 name = "block"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -846,9 +852,9 @@ checksum = "5ce89b21cab1437276d2650d57e971f9d548a2d9037cc231abdc0562b97498ce"
 
 [[package]]
 name = "bytemuck"
-version = "1.15.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d6d68c57235a3a081186990eca2867354726650f42f7516ca50c28d6281fd15"
+checksum = "6fd4c6dcc3b0aea2f5c0b4b82c2b15fe39ddbc76041a310848f4706edf76bb31"
 dependencies = [
  "bytemuck_derive",
 ]
@@ -2902,6 +2908,7 @@ dependencies = [
 name = "picachv-api"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "picachv-core",
  "picachv-error",
  "picachv-message",
@@ -2917,11 +2924,13 @@ dependencies = [
 name = "picachv-core"
 version = "0.1.0"
 dependencies = [
+ "ahash",
  "arrow-array",
  "arrow-ipc",
  "arrow-schema",
  "arrow-select",
  "bincode",
+ "bitmaps",
  "chrono",
  "jemallocator",
  "num_enum",
@@ -2962,6 +2971,7 @@ dependencies = [
 name = "picachv-monitor"
 version = "0.1.0"
 dependencies = [
+ "ahash",
  "arrow-array",
  "picachv-core",
  "picachv-error",
@@ -2969,8 +2979,6 @@ dependencies = [
  "prost 0.12.4",
  "readonly",
  "spin",
- "tracing",
- "tracing-subscriber",
  "uuid",
 ]
 

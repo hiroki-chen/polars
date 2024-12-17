@@ -9,6 +9,7 @@ use polars_core::config::{get_file_prefetch_size, verbose};
 use polars_core::utils::accumulate_dataframes_vertical;
 use polars_io::cloud::CloudOptions;
 use polars_io::{is_cloud_url, RowIndex};
+use uuid::Uuid;
 
 use super::*;
 
@@ -23,9 +24,26 @@ pub struct ParquetExec {
     #[allow(dead_code)]
     metadata: Option<Arc<FileMetaData>>,
     with_policy: Option<Arc<PathBuf>>,
+    active_df_uuid: Option<Uuid>,
 }
 
 impl ParquetExec {
+    pub(crate) fn load_policy(&mut self, df: &DataFrame, mask: Option<ChunkedArray<BooleanType>>, ctx_id: Uuid) -> PolarsResult<()> {
+        // HACK: This is to reliably exclude the time taken to register the policy.
+        if let Some(policy) = self.with_policy.as_ref() {
+            let filter = mask.as_ref().map(|mask| mask.iter().map(|e| e.unwrap_or_default()).collect::<Vec<_>>());
+            let projection = match materialize_projection(self.file_options.with_columns.as_ref().map(|e| e.as_slice()), &self.file_info.schema, None, false) {
+                Some(proj) => proj,
+                None => df.fields().iter().enumerate().map(|(i, _)| i as usize).collect::<Vec<_>>(),
+            };
+
+            self.active_df_uuid.replace(
+            register_policy_dataframe_parquet(ctx_id, self.with_policy.as_ref().unwrap().as_path().to_str().unwrap(), &projection, filter.as_ref().map(|f| f.as_slice())).map_err(|e| PolarsError::InvalidOperation(e.to_string().into()))?);
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn new(
         paths: Arc<[PathBuf]>,
         file_info: FileInfo,
@@ -35,8 +53,9 @@ impl ParquetExec {
         file_options: FileScanOptions,
         metadata: Option<Arc<FileMetaData>>,
         with_policy: Option<Arc<PathBuf>>,
-    ) -> Self {
-        ParquetExec {
+        ctx_id: Uuid,
+    ) -> PolarsResult<Self> {
+        let mut executor = ParquetExec {
             paths,
             file_info,
             predicate,
@@ -45,7 +64,15 @@ impl ParquetExec {
             file_options,
             metadata,
             with_policy,
+            active_df_uuid: None,
+        };
+
+        if let Some(policy) = executor.with_policy.as_ref() {
+            let (df, mask) = executor.read()?;
+            executor.load_policy(&df, mask, ctx_id)?;
         }
+
+        Ok(executor)
     }
 
     fn read_par(&mut self) -> PolarsResult<Vec<DataFrame>> {
@@ -406,14 +433,12 @@ impl Executor for ParquetExec {
         let (df, mask) = state.record(|| self.read(), profile_name)?;
 
         if state.policy_check {
-            let filter = mask.as_ref().map(|mask| mask.iter().map(|e| e.unwrap_or_default()).collect::<Vec<_>>());
-            let projection = match materialize_projection(self.file_options.with_columns.as_ref().map(|e| e.as_slice()), &self.file_info.schema, None, false) {
-                Some(proj) => proj,
-                None => df.fields().iter().enumerate().map(|(i, _)| i as usize).collect::<Vec<_>>(),
-            };
+            if self.active_df_uuid.is_none() {
+                self.load_policy(&df, mask, state.ctx_id)?;
+            }
 
-            state.active_df_uuid = 
-            register_policy_dataframe_parquet(state.ctx_id, self.with_policy.as_ref().unwrap().as_path().to_str().unwrap(), &projection, filter.as_ref().map(|f| f.as_slice())).map_err(|e| PolarsError::InvalidOperation(e.to_string().into()))?;
+            state.active_df_uuid = self.active_df_uuid.clone().unwrap();
+
             let project_list = match self.file_options.with_columns.as_ref() {
                     Some(project_list) => {
                         let project_list = project_list
