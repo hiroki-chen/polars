@@ -666,15 +666,23 @@ impl LazyFrame {
         state.set_policy_checking(policy_check);
 
         let now = std::time::Instant::now();
-        let df = physical_plan.execute(&mut state)?;
-        let elapsed = now.elapsed();
+        let df = match physical_plan.execute(&mut state) {
+            Ok(df) => df,
+            Err(e) => {
+                let elapsed = now.elapsed();
+                eprintln!("elapsed time: {:?}", elapsed);
 
-        println!("elapsed time: {:?}", elapsed);
+                return Err(e);
+            },
+        };
 
         if policy_check {
             finalize(ctx_id, state.get_active_df_uuid())
                 .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
         }
+
+        let elapsed = now.elapsed();
+        println!("elapsed time: {:?}", elapsed);
 
         Ok(df)
     }
