@@ -2896,6 +2896,7 @@ dependencies = [
 [[package]]
 name = "picachv"
 version = "0.1.0"
+source = "git+https://github.com/hiroki-chen/picachv#ebdd78c21e98ccd551ceaad7fb65bf224bd2920f"
 dependencies = [
  "picachv-api",
  "picachv-core",
@@ -2907,6 +2908,7 @@ dependencies = [
 [[package]]
 name = "picachv-api"
 version = "0.1.0"
+source = "git+https://github.com/hiroki-chen/picachv#ebdd78c21e98ccd551ceaad7fb65bf224bd2920f"
 dependencies = [
  "bytemuck",
  "picachv-core",
@@ -2923,6 +2925,7 @@ dependencies = [
 [[package]]
 name = "picachv-core"
 version = "0.1.0"
+source = "git+https://github.com/hiroki-chen/picachv#ebdd78c21e98ccd551ceaad7fb65bf224bd2920f"
 dependencies = [
  "ahash",
  "arrow-array",
@@ -2953,6 +2956,7 @@ dependencies = [
 [[package]]
 name = "picachv-error"
 version = "0.1.0"
+source = "git+https://github.com/hiroki-chen/picachv#ebdd78c21e98ccd551ceaad7fb65bf224bd2920f"
 dependencies = [
  "thiserror",
 ]
@@ -2960,6 +2964,7 @@ dependencies = [
 [[package]]
 name = "picachv-message"
 version = "0.1.0"
+source = "git+https://github.com/hiroki-chen/picachv#ebdd78c21e98ccd551ceaad7fb65bf224bd2920f"
 dependencies = [
  "picachv-error",
  "prost 0.12.4",
@@ -2970,6 +2975,7 @@ dependencies = [
 [[package]]
 name = "picachv-monitor"
 version = "0.1.0"
+source = "git+https://github.com/hiroki-chen/picachv#ebdd78c21e98ccd551ceaad7fb65bf224bd2920f"
 dependencies = [
  "ahash",
  "arrow-array",
